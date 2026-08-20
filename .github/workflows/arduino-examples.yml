@@ -1,0 +1,134 @@
+name: Arduino examples
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sketch:
+        description: "Arduino sketch directory name, path, or all"
+        required: false
+        default: "all"
+      variant:
+        description: "Display variant: all, lcd-7, lcd-8, or lcd-10-1"
+        required: false
+        default: "all"
+
+permissions:
+  contents: read
+
+env:
+  ARDUINO_CLI_VERSION: "1.5.1"
+  ARDUINO_CORE_VERSION: "3.3.11"
+  ARDUINO_FQBN: "esp32:esp32:esp32p4:ChipVariant=postv3,PSRAM=enabled,FlashSize=32M,FlashMode=qio,FlashFreq=80,PartitionScheme=app13M_data7M_32MB,UploadMode=default,UploadSpeed=921600"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  discover:
+    name: Discover Arduino examples
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.examples.outputs.matrix }}
+      has_examples: ${{ steps.examples.outputs.has_examples }}
+      examples: ${{ steps.examples.outputs.examples }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Test Arduino discovery
+        run: python -B .github/scripts/test_discover_arduino_examples.py
+      - name: Repository policy
+        run: python -B .github/scripts/test_repository_policy.py
+      - name: Discover changed Arduino examples
+        id: examples
+        shell: bash
+        env:
+          REQUESTED_SKETCH: ${{ inputs.sketch }}
+          REQUESTED_VARIANT: ${{ inputs.variant }}
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            python .github/scripts/discover_arduino_examples.py \
+              --example "$REQUESTED_SKETCH" \
+              --variant "$REQUESTED_VARIANT"
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            python .github/scripts/discover_arduino_examples.py \
+              --base-ref "${{ github.event.pull_request.base.sha }}" \
+              --head-ref "${{ github.event.pull_request.head.sha }}"
+          else
+            before="${{ github.event.before }}"
+            if [[ "$before" == "0000000000000000000000000000000000000000" ]]; then before=""; fi
+            python .github/scripts/discover_arduino_examples.py \
+              --base-ref "$before" \
+              --head-ref "${{ github.sha }}"
+          fi
+
+  build:
+    name: Build ${{ matrix.name }} (${{ matrix.display_variant }})
+    needs: discover
+    if: needs.discover.outputs.has_examples == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Install Arduino CLI
+        shell: bash
+        env:
+          ARDUINO_CLI_LINUX_AMD64_SHA256: "28a8e119c498a25607821c36cb2dc49e8463941b261a0d99091baa7bc692dd2b"
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/arduino-cli.tar.gz"
+          install_dir="$RUNNER_TEMP/arduino-cli"
+          wget --https-only --tries=3 --output-document "$archive" \
+            "https://github.com/arduino/arduino-cli/releases/download/v${ARDUINO_CLI_VERSION}/arduino-cli_${ARDUINO_CLI_VERSION}_Linux_64bit.tar.gz"
+          echo "${ARDUINO_CLI_LINUX_AMD64_SHA256}  ${archive}" | sha256sum --check --strict
+          mkdir -p "$install_dir"
+          tar -xzf "$archive" --directory "$install_dir" arduino-cli
+          echo "$install_dir" >> "$GITHUB_PATH"
+      - name: Install ESP32 Arduino core
+        shell: bash
+        run: |
+          set -euo pipefail
+          arduino-cli config init --overwrite
+          arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install "esp32:esp32@${ARDUINO_CORE_VERSION}"
+      - name: Compile ${{ matrix.path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="${{ matrix.path }}"
+          project_name="$(basename "$project")"
+          test -f "$project/$project_name.ino"
+          test "$(find "$project" -maxdepth 1 -type f -name '*.ino' | wc -l)" -eq 1
+          arduino-cli compile \
+            --fqbn "$ARDUINO_FQBN" \
+            --libraries examples/arduino/libraries \
+            --build-property "compiler.cpp.extra_flags=-DLCD_X_DISPLAY_VARIANT=${{ matrix.display_value }}" \
+            --build-path "build/arduino-${{ matrix.name }}-${{ matrix.display_variant }}" \
+            "$project"
+
+  gate:
+    name: Arduino CI gate
+    needs: [discover, build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - shell: bash
+        env:
+          DISCOVER_RESULT: ${{ needs.discover.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          HAS_EXAMPLES: ${{ needs.discover.outputs.has_examples }}
+        run: |
+          set -euo pipefail
+          test "$DISCOVER_RESULT" = success
+          if [[ "$HAS_EXAMPLES" == true ]]; then test "$BUILD_RESULT" = success; else test "$BUILD_RESULT" = skipped; fi

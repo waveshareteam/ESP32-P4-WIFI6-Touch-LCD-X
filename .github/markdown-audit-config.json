@@ -1,0 +1,44 @@
+{
+  "classification_rules": [
+    {
+      "category": "embedded_upstream",
+      "patterns": ["examples/esp-idf/10_mp4_player/components/esp_extractor/**"]
+    }
+  ],
+  "exclude_patterns": [
+    "firmware/brookesia/components/brookesia_core/*.md",
+    "firmware/brookesia/components/brookesia_core/**/*.md",
+    "firmware/brookesia/components/esp32_p4_wifi6_touch_lcd_x/README.md",
+    "firmware/brookesia/components/XiaozhiApp/third_party/xiaozhi_esp32/README.md"
+  ],
+  "pair_exempt_patterns": [],
+  "language_link_exempt_patterns": [],
+  "relative_link_ignore_patterns": [],
+  "docs_only_allowed_patterns": [],
+  "sensitive_allow_regexes": [],
+  "bilingual_pairs": [],
+  "bilingual_directory_mappings": [],
+  "homepage_h3_emoji_allow_patterns": [],
+  "homepage_pairs": [
+    {
+      "english": "README.md",
+      "chinese": "README_ZH.md",
+      "profile": "multi-product-hub",
+      "required_components": [
+        "centered_header",
+        "html_h1",
+        "subtitle",
+        "badges",
+        "language_switch",
+        "quick_links",
+        "hero_image",
+        "separator",
+        "h2"
+      ],
+      "required_quick_links": ["product", "documentation", "firmware", "esp_idf", "arduino"],
+      "required_badges": ["build", "license"],
+      "required_h2_icons": ["✨", "📋", "🖥️", "🚀", "🧪", "🔧", "🤖", "📦", "🗂️", "🤝", "📄"],
+      "h3_emoji_allow_patterns": []
+    }
+  ]
+}

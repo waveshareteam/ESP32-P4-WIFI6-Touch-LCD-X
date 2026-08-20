@@ -1,0 +1,114 @@
+name: Maintained firmware
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  discover:
+    name: Discover maintained firmware impact
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.scope.outputs.firmware_build_impact }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            python .github/scripts/discover_esp_idf_examples.py --base-ref "${{ github.event.pull_request.base.sha }}" --head-ref "${{ github.event.pull_request.head.sha }}"
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo 'firmware_build_impact=true' >> "$GITHUB_OUTPUT"
+          else
+            python .github/scripts/discover_esp_idf_examples.py --base-ref "${{ github.event.before }}" --head-ref "${{ github.sha }}"
+          fi
+
+  build:
+    name: Build maintained firmware (${{ matrix.revision_profile }})
+    needs: discover
+    if: needs.discover.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        revision_profile: [rev3_x]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - id: metadata
+        name: Derive exact checkout metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+          printf 'sha12=%s\n' "${sha:0:12}" >> "$GITHUB_OUTPUT"
+      - name: Build and package three maintained products
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.5.5
+          target: esp32p4
+          path: firmware/brookesia
+          command: |
+            set -euo pipefail
+            for variant in lcd-7 lcd-8 lcd-10-1; do
+              python ../../.github/scripts/build_esp_idf_artifact.py \
+                --repo-root ../.. \
+                --idf-version v5.5.5 \
+                --display-variant "$variant" \
+                --revision-profile "${{ matrix.revision_profile }}" \
+                --build-dir "build/ci-$variant" \
+                --sdkconfig "sdkconfig.ci-$variant" \
+                --package-artifact true \
+                --artifact-kind maintained-product-firmware \
+                --expected-checkout-sha "${{ github.event.pull_request.head.sha || github.sha }}"
+            done
+      - name: Upload LCD-7 maintained firmware
+        uses: actions/upload-artifact@v7
+        with:
+          name: ESP32-P4-WIFI6-Touch-LCD-7-brookesia-${{ matrix.revision_profile }}-5.5.5-${{ steps.metadata.outputs.sha12 }}
+          path: ci-artifacts/ESP32-P4-WIFI6-Touch-LCD-7-brookesia-${{ matrix.revision_profile }}-5.5.5-${{ steps.metadata.outputs.sha12 }}.zip
+          archive: false
+          retention-days: 14
+          if-no-files-found: error
+      - name: Upload LCD-8 maintained firmware
+        uses: actions/upload-artifact@v7
+        with:
+          name: ESP32-P4-WIFI6-Touch-LCD-8-brookesia-${{ matrix.revision_profile }}-5.5.5-${{ steps.metadata.outputs.sha12 }}
+          path: ci-artifacts/ESP32-P4-WIFI6-Touch-LCD-8-brookesia-${{ matrix.revision_profile }}-5.5.5-${{ steps.metadata.outputs.sha12 }}.zip
+          archive: false
+          retention-days: 14
+          if-no-files-found: error
+      - name: Upload LCD-10.1 maintained firmware
+        uses: actions/upload-artifact@v7
+        with:
+          name: ESP32-P4-WIFI6-Touch-LCD-10.1-brookesia-${{ matrix.revision_profile }}-5.5.5-${{ steps.metadata.outputs.sha12 }}
+          path: ci-artifacts/ESP32-P4-WIFI6-Touch-LCD-10.1-brookesia-${{ matrix.revision_profile }}-5.5.5-${{ steps.metadata.outputs.sha12 }}.zip
+          archive: false
+          retention-days: 14
+          if-no-files-found: error
+
+  gate:
+    name: Maintained firmware gate
+    needs: [discover, build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - shell: bash
+        run: |
+          test "${{ needs.discover.result }}" = success
+          if [[ "${{ needs.discover.outputs.build }}" == true ]]; then test "${{ needs.build.result }}" = success; else test "${{ needs.build.result }}" = skipped; fi

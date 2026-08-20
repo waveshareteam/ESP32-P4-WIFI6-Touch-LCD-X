@@ -2,6 +2,6 @@ dependencies:
   idf: ">=5.3"
 
   esp_video:
-    version: "0.8.*"
+    version: "~2.0"
     public: true
-  waveshare/esp32_p4_wifi6_touch_lcd_x: "*"
+  waveshare/esp32_p4_wifi6_touch_lcd_x: "^2.0.3"

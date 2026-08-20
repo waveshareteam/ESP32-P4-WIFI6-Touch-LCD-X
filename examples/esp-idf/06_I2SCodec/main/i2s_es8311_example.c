@@ -10,6 +10,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/i2s_std.h"
+#include "driver/gpio.h"
 #include "esp_system.h"
 #include "esp_check.h"
 #include "es8311.h"
@@ -28,21 +29,21 @@ extern const uint8_t music_pcm_start[] asm("_binary_canon_pcm_start");
 extern const uint8_t music_pcm_end[]   asm("_binary_canon_pcm_end");
 #endif
 
+#if !defined(CONFIG_EXAMPLE_BSP) && defined(GPIO_OUTPUT_PA)
 static void gpio_init(void)
 {
-    // 配置GPIO48为输出模式
     gpio_config_t io_conf = {
-        .pin_bit_mask = (1ULL << GPIO_OUTPUT_PA), // 选择GPIO48
-        .mode = GPIO_MODE_OUTPUT,                  // 配置为输出模式
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,     // 禁用下拉
-        .pull_up_en = GPIO_PULLUP_DISABLE,         // 禁用上拉
-        .intr_type = GPIO_INTR_DISABLE             // 禁用中断
+        .pin_bit_mask = (1ULL << GPIO_OUTPUT_PA),
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE
     };
     gpio_config(&io_conf);
 
-    // 设置GPIO48为高电平
     gpio_set_level(GPIO_OUTPUT_PA, 1);
 }
+#endif
 
 static esp_err_t es8311_codec_init(void)
 {
@@ -199,7 +200,9 @@ static void i2s_echo(void *args)
 
 void app_main(void)
 {
+#if !defined(CONFIG_EXAMPLE_BSP) && defined(GPIO_OUTPUT_PA)
     gpio_init();
+#endif
     printf("i2s es8311 codec example start\n-----------------------------\n");
     /* Initialize i2s peripheral */
     if (i2s_driver_init() != ESP_OK) {

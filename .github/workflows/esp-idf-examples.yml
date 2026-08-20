@@ -1,0 +1,186 @@
+name: ESP-IDF examples
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      project:
+        description: "ESP-IDF example directory name, path, or all"
+        required: false
+        default: "all"
+      variant:
+        description: "Display variant: all, shared, lcd-7, lcd-8, or lcd-10-1"
+        required: false
+        default: "all"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  discover:
+    name: Discover examples
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.examples.outputs.matrix }}
+      has_examples: ${{ steps.examples.outputs.has_examples }}
+      examples: ${{ steps.examples.outputs.examples }}
+      docs_only: ${{ steps.examples.outputs.docs_only }}
+      firmware_touched: ${{ steps.examples.outputs.firmware_touched }}
+      firmware_kinds: ${{ steps.examples.outputs.firmware_kinds }}
+      release_review: ${{ steps.examples.outputs.release_review }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Test discovery script
+        run: python -B .github/scripts/test_discover_esp_idf_examples.py
+
+      - name: Test artifact packaging script
+        run: python -B .github/scripts/test_build_esp_idf_artifact.py
+
+      - name: Repository policy
+        run: python -B .github/scripts/test_repository_policy.py
+
+      - name: Test CI firmware flasher contract
+        shell: pwsh
+        run: pwsh -NoProfile -File scripts/Flash-CI-Firmware.ps1 -SelfTest
+
+      - name: Discover changed ESP-IDF examples
+        id: examples
+        shell: bash
+        env:
+          REQUESTED_PROJECT: ${{ inputs.project }}
+          REQUESTED_VARIANT: ${{ inputs.variant }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            python .github/scripts/discover_esp_idf_examples.py \
+              --example "$REQUESTED_PROJECT" \
+              --variant "$REQUESTED_VARIANT" \
+              --artifact-sha "${{ github.sha }}"
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            python .github/scripts/discover_esp_idf_examples.py \
+              --base-ref "${{ github.event.pull_request.base.sha }}" \
+              --head-ref "${{ github.event.pull_request.head.sha }}" \
+              --artifact-sha "${{ github.event.pull_request.head.sha }}"
+          else
+            before="${{ github.event.before }}"
+            if [[ "$before" == "0000000000000000000000000000000000000000" ]]; then
+              before=""
+            fi
+            python .github/scripts/discover_esp_idf_examples.py \
+              --base-ref "$before" \
+              --head-ref "${{ github.sha }}" \
+              --artifact-sha "${{ github.sha }}"
+          fi
+
+      - name: Summary
+        shell: bash
+        env:
+          DOCS_ONLY: ${{ steps.examples.outputs.docs_only }}
+          FIRMWARE_TOUCHED: ${{ steps.examples.outputs.firmware_touched }}
+          FIRMWARE_KINDS: ${{ steps.examples.outputs.firmware_kinds }}
+          RELEASE_REVIEW: ${{ steps.examples.outputs.release_review }}
+          HAS_EXAMPLES: ${{ steps.examples.outputs.has_examples }}
+          SELECTED_EXAMPLES: ${{ steps.examples.outputs.examples }}
+        run: |
+          if [[ "$HAS_EXAMPLES" == "true" ]]; then
+            {
+              echo "### ESP-IDF examples selected"
+              echo
+              echo "$SELECTED_EXAMPLES" | tr ',' '\n' | sed '/^$/d' | sed 's/^/- /'
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            if [[ "$FIRMWARE_TOUCHED" == "true" ]]; then
+              echo "Firmware paths changed (kinds: ${FIRMWARE_KINDS:-other}); firmware remains outside example CI." >> "$GITHUB_STEP_SUMMARY"
+              if [[ "$RELEASE_REVIEW" == "true" ]]; then
+                echo "A firmware binary or archive changed and requires explicit release review." >> "$GITHUB_STEP_SUMMARY"
+              fi
+            elif [[ "$DOCS_ONLY" == "true" ]]; then
+              echo "Documentation-only changes detected; no ESP-IDF example builds selected." >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "No ESP-IDF example build impact detected." >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+
+  build:
+    name: Build ${{ matrix.example }} (${{ matrix.variant_label }}, ${{ matrix.idf_version }})
+    needs: discover
+    if: needs.discover.outputs.has_examples == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Build with ESP-IDF
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: ${{ matrix.idf_version }}
+          target: esp32p4
+          path: ${{ matrix.example }}
+          command: >-
+            python ../../../.github/scripts/build_esp_idf_artifact.py
+            --repo-root ../../..
+            --idf-version "${{ matrix.idf_version }}"
+            --display-variant "${{ matrix.display_variant }}"
+            --variant-defaults "${{ matrix.variant_defaults }}"
+            --revision-profile "${{ matrix.revision_profile }}"
+            --sdkconfig-ci "${{ matrix.sdkconfig_ci }}"
+            --package-artifact "${{ matrix.package_artifact }}"
+            --expected-checkout-sha "${{ github.event.pull_request.head.sha || github.sha }}"
+
+      - name: Upload source-built display artifact
+        if: matrix.package_artifact == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ci-artifacts/*.zip
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+  gate:
+    name: ESP-IDF CI gate
+    needs: [discover, build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require successful discovery and selected builds
+        shell: bash
+        env:
+          DISCOVER_RESULT: ${{ needs.discover.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          HAS_EXAMPLES: ${{ needs.discover.outputs.has_examples }}
+        run: |
+          if [[ "$DISCOVER_RESULT" != "success" ]]; then
+            echo "Example discovery did not succeed: $DISCOVER_RESULT" >&2
+            exit 1
+          fi
+
+          if [[ "$HAS_EXAMPLES" == "true" && "$BUILD_RESULT" != "success" ]]; then
+            echo "One or more selected example builds did not succeed: $BUILD_RESULT" >&2
+            exit 1
+          fi
+
+          if [[ "$HAS_EXAMPLES" != "true" && "$BUILD_RESULT" != "skipped" ]]; then
+            echo "No examples were selected, but the build result was: $BUILD_RESULT" >&2
+            exit 1
+          fi
+
+          echo "ESP-IDF CI routing and selected builds succeeded."
