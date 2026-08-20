@@ -1,0 +1,39 @@
+{
+  "display_examples": [
+    "examples/esp-idf/07_Displaycolorbar",
+    "examples/esp-idf/08_lvgl_demo_v9",
+    "examples/esp-idf/09_video_lcd_display",
+    "examples/esp-idf/10_mp4_player",
+    "examples/esp-idf/11_esp_brookesia_phone",
+    "examples/esp-idf/12_usb_extend_screen"
+  ],
+  "variants": [
+    {
+      "slug": "lcd-7",
+      "product": "ESP32-P4-WIFI6-Touch-LCD-7",
+      "label": "7-inch ILI9881C",
+      "overlay": "config/sdkconfig/lcd-7.defaults",
+      "kconfig": "CONFIG_BSP_LCD_TYPE_720_1280_7_INCH",
+      "resolution": "720x1280",
+      "panel": "ILI9881C"
+    },
+    {
+      "slug": "lcd-8",
+      "product": "ESP32-P4-WIFI6-Touch-LCD-8",
+      "label": "8-inch JD9365",
+      "overlay": "config/sdkconfig/lcd-8.defaults",
+      "kconfig": "CONFIG_BSP_LCD_TYPE_800_1280_8_INCH",
+      "resolution": "800x1280",
+      "panel": "JD9365"
+    },
+    {
+      "slug": "lcd-10-1",
+      "product": "ESP32-P4-WIFI6-Touch-LCD-10.1",
+      "label": "10.1-inch JD9365",
+      "overlay": "config/sdkconfig/lcd-10-1.defaults",
+      "kconfig": "CONFIG_BSP_LCD_TYPE_800_1280_10_1_INCH",
+      "resolution": "800x1280",
+      "panel": "JD9365"
+    }
+  ]
+}

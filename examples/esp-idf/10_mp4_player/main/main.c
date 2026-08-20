@@ -58,7 +58,7 @@ static esp_err_t display_decoded_frame(uint8_t *buffer, uint32_t buffer_size,
 
 void app_main()
 {
-    ESP_LOGI(TAG, "Starting HDMI MP4 Player application");
+    ESP_LOGI(TAG, "Starting MP4 Player application");
 
     // Initialize display
     esp_err_t ret = bsp_display_new(NULL, &lcd_panel, &lcd_io);

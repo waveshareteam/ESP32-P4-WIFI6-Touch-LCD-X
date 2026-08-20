@@ -1,0 +1,37 @@
+# ESP-IDF build outputs
+build/
+build-*/
+managed_components/
+
+# Local components make this generated lock contain host-specific paths.
+dependencies.lock
+
+sdkconfig
+sdkconfig.old
+
+# Flash and binary artifacts
+*.bin
+*.elf
+*.map
+*.uf2
+
+# Local editor and tool state
+.vscode/
+.idea/
+.cache/
+compile_commands.json
+
+# Python and temporary files
+__pycache__/
+*.py[cod]
+*.log
+*.tmp
+*.bak
+*.swp
+
+# OS metadata
+.DS_Store
+Thumbs.db
+*.Zone.Identifier
+
+# Music under spiffs/music is part of the factory storage image.

@@ -1,4 +1,4 @@
-menu "HDMI MP4 Player Configuration"
+menu "MP4 Player Configuration"
 
     menu "Video File Configuration"
         config MP4_FILENAME
@@ -19,7 +19,7 @@ menu "HDMI MP4 Player Configuration"
                 When disabled, allocates separate frame buffers in external memory.
 
                 Important notes when using LCD internal buffer:
-                1. MP4 video resolution must match the HDMI output resolution
+                1. MP4 video resolution must match the selected LCD resolution
                 2. This mode provides the highest possible frame rate
 
     endmenu

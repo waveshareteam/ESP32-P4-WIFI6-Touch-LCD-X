@@ -1,0 +1,53 @@
+{
+  "build_override_patterns": [],
+  "documentation_patterns": [],
+  "documentation_asset_patterns": [
+    "assets/ESP32-P4-WIFI6-Touch-LCD-X.jpg",
+    "schematic/*.pdf",
+    "examples/esp-idf/11_esp_brookesia_phone/components/brookesia_core/docs/**/*.gif",
+    "examples/esp-idf/11_esp_brookesia_phone/components/brookesia_core/docs/**/*.png",
+    "examples/esp-idf/11_esp_brookesia_phone/components/brookesia_core/systems/speaker/docs/**/*.gif",
+    "examples/esp-idf/11_esp_brookesia_phone/components/brookesia_core/systems/speaker/docs/**/*.png"
+  ],
+  "ignore_build_patterns": [
+    ".gitattributes",
+    ".github/markdown-audit-config.json",
+    ".github/scripts/audit_markdown.py",
+    ".github/scripts/check_markdown_links.py",
+    ".github/scripts/test_audit_markdown.py",
+    ".github/scripts/test_check_markdown_links.py",
+    ".github/workflows/docs.yml",
+    "Flash-CI-Firmware.cmd",
+    "scripts/Flash-CI-Firmware.ps1",
+    "examples/esp-idf/**/LICENSE*",
+    "examples/esp-idf/**/license*"
+  ],
+  "firmware_patterns": [
+    "firmware/brookesia/**"
+  ],
+  "esp_idf_shared_patterns": [],
+  "arduino_shared_patterns": [
+    "examples/arduino/libraries/**"
+  ],
+  "esp_idf_global_patterns": [
+    ".github/scripts/build_esp_idf_artifact.py",
+    ".github/scripts/discover_esp_idf_examples.py",
+    ".github/scripts/test_build_esp_idf_artifact.py",
+    ".github/scripts/test_discover_esp_idf_examples.py",
+    ".github/scripts/test_repository_policy.py",
+    ".github/workflows/esp-idf-examples.yml",
+    ".github/workflows/maintained-firmware.yml",
+    ".github/ci-routing-config.json",
+    "config/display-variants.json",
+    ".gitignore"
+  ],
+  "arduino_global_patterns": [
+    ".github/scripts/discover_arduino_examples.py",
+    ".github/scripts/test_discover_arduino_examples.py",
+    ".github/scripts/test_repository_policy.py",
+    ".github/workflows/arduino-examples.yml",
+    ".github/ci-routing-config.json",
+    ".gitignore"
+  ],
+  "global_build_patterns": []
+}

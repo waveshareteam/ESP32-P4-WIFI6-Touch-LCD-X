@@ -3,4 +3,4 @@ dependencies:
   ## Required IDF version
   idf: ">=5.3"
 
-  waveshare/esp32_p4_wifi6_touch_lcd_x: "*"
+  waveshare/esp32_p4_wifi6_touch_lcd_x: "^2.0.3"

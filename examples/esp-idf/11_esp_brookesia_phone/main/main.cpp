@@ -65,6 +65,11 @@ If you need to use the three-cache anti-tear configuration, you need to fix idf 
         stylesheet = new (std::nothrow) Stylesheet(STYLESHEET_800_1280_DARK);
         ESP_UTILS_CHECK_NULL_EXIT(stylesheet, "Create stylesheet failed");
     }
+    else if ((BSP_LCD_H_RES == 720) && (BSP_LCD_V_RES == 1280))
+    {
+        stylesheet = new (std::nothrow) Stylesheet(STYLESHEET_720_1280_DARK);
+        ESP_UTILS_CHECK_NULL_EXIT(stylesheet, "Create stylesheet failed");
+    }
     if (stylesheet)
     {
         ESP_UTILS_LOGI("Using stylesheet (%s)", stylesheet->core.name);
