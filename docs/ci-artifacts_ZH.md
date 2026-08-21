@@ -52,7 +52,10 @@ artifact 保留 14 天。这些文件是源码示例构建产物，不是出厂�
 `firmware/brookesia` 是维护中的产品固件源码。专用 ESP-IDF v5.5.5 工作流为 lcd-7、lcd-8 和 lcd-10.1 分别构建一个 Rev3.x 产物，共三个。由于该精确提交的 CI 不发布 Rev1.3 产物，Windows 助手会拒绝 Rev1.3 硬件。带日期的 FactoryOnly BIN 是独立且不可变的交付文件，不由 CI 重新生成。`11_esp_brookesia_phone` 仍由常规示例矩阵覆盖。
 
 [Arduino 示例工作流](https://github.com/waveshareteam/ESP32-P4-WIFI6-Touch-LCD-X/actions/workflows/arduino-examples.yml)
-是独立的 6 行编译矩阵：两个示例分别面向 LCD-7、LCD-8 和 LCD-10.1，使用 Arduino CLI
-`1.5.1` 和 Arduino-ESP32 `3.3.11`。该工作流不生成 Actions artifact、发布镜像或出厂
-固件。板级选项和硬件验证边界请参阅
-[Arduino 示例说明](../examples/arduino/README_ZH.md)。
+是独立的 30 行编译矩阵：10 个示例分别面向 LCD-7、LCD-8 和 LCD-10.1，使用 Arduino CLI
+`1.5.1`、Arduino-ESP32 `3.3.11` 和 `postv3` Rev3.x 板级配置。只有 `04_LVGLV9`
+使用随仓库提供的 LVGL `9.5.0` 配置。该工作流不生成 Actions artifact、发布镜像或出厂固件。编译成功
+不等于硬件测试；`05_WiFiAnalyzer` 在开发板上运行还需要 ESP32-C6 中兼容的 Hosted
+固件。示例清单、板级选项和硬件验证边界请参阅
+[Arduino 示例说明](../examples/arduino/README_ZH.md)。CI 使用与 Arduino IDE 用户
+相同的自包含 `examples/arduino/libraries` 目录，构建期间不下载 Arduino 库。

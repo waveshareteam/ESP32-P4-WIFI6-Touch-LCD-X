@@ -1,1 +1,2 @@
 firmware/*.bin binary
+examples/arduino/libraries/lvgl/** -whitespace

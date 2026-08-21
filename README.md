@@ -103,12 +103,14 @@ the example-specific notes before flashing.
 
 ## 🔧 Arduino
 
-[`examples/arduino/`](examples/arduino/) provides two first-party sketches:
-[`01_DisplayColorBars`](examples/arduino/examples/01_DisplayColorBars/) and
-[`02_TouchDrawing`](examples/arduino/examples/02_TouchDrawing/). Both use the
-bundled `lcd_x` library and support LCD-7, LCD-8, and LCD-10.1. See the
-[Arduino examples guide](examples/arduino/README.md) for the exact
-Arduino-ESP32 `3.3.11` FQBN and variant build command.
+[`examples/arduino/`](examples/arduino/) provides 10 first-party sketches for
+display, touch, text, LVGL 9, hosted Wi-Fi analysis, camera preview and ISP
+tuning, MicroSD, audio playback, and microphone capture. The
+display-facing sketches use the bundled `lcd_x` library; all 10 sketches are
+compile-checked for LCD-7, LCD-8, and LCD-10.1. Only `04_LVGLV9` uses the
+bundled LVGL `9.5.0` configuration. See the [Arduino examples
+guide](examples/arduino/README.md) for the complete sketch list, peripheral
+assignments, exact Arduino-ESP32 `3.3.11` FQBN, and variant build command.
 
 The display reset is GPIO27. Touch `INT` and `RST` are intentionally left as
 `GPIO_NUM_NC`; the library probes `0x5D` followed by `0x14`, binds the actual
@@ -140,9 +142,12 @@ workflow has one stable result for branch-protection rules.
 
 The [Arduino examples
 workflow](https://github.com/waveshareteam/ESP32-P4-WIFI6-Touch-LCD-X/actions/workflows/arduino-examples.yml)
-compiles both Arduino sketches with Arduino CLI `1.5.1` and Arduino-ESP32
-`3.3.11` for all three display variants (six rows). It is compile-only and does
-not publish firmware or downloadable build artifacts.
+compiles the 10 Arduino sketches with Arduino CLI `1.5.1` and Arduino-ESP32
+`3.3.11` for all three display variants (30 rows). It uses the `postv3`
+ESP32-P4 board profile, is compile-only, and does not publish firmware or
+downloadable build artifacts. `05_WiFiAnalyzer` requires compatible hosted
+firmware on the ESP32-C6 coprocessor when run on hardware; see [hosted Wi-Fi
+compatibility](docs/p4-c6-hosted-wifi.md).
 
 Factory binaries are excluded from source-build discovery. See
 [Component Ownership](docs/components.md) for the boundary between local board

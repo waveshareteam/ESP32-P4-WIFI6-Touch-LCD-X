@@ -79,7 +79,11 @@ def tracked_first_party_files(root: Path) -> list[Path]:
         for raw in result.stdout.split(b"\0")
         if raw
     ]
-    return [root / path for path in paths if "components" not in path.parts]
+    return [
+        root / path
+        for path in paths
+        if "components" not in path.parts and "libraries" not in path.parts
+    ]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -88,7 +92,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--tracked-first-party",
         action="store_true",
-        help="Validate every tracked Markdown file outside embedded component trees.",
+        help="Validate every tracked Markdown file outside embedded component and library trees.",
     )
     args = parser.parse_args(argv)
 
