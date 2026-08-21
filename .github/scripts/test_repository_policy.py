@@ -20,6 +20,18 @@ MANIFESTS = (
     'examples/esp-idf/11_esp_brookesia_phone/main/idf_component.yml',
     'examples/esp-idf/12_usb_extend_screen/components/bsp_extra/idf_component.yml',
 )
+ARDUINO_SKETCHES = (
+    'examples/arduino/examples/01_DisplayColorBars/01_DisplayColorBars.ino',
+    'examples/arduino/examples/02_TouchDrawing/02_TouchDrawing.ino',
+    'examples/arduino/examples/03_AsciiTable/03_AsciiTable.ino',
+    'examples/arduino/examples/04_LVGLV9/04_LVGLV9.ino',
+    'examples/arduino/examples/05_WiFiAnalyzer/05_WiFiAnalyzer.ino',
+    'examples/arduino/examples/06_CameraPreview/06_CameraPreview.ino',
+    'examples/arduino/examples/07_CameraISPTuning/07_CameraISPTuning.ino',
+    'examples/arduino/examples/08_SDCard/08_SDCard.ino',
+    'examples/arduino/examples/09_AudioPlayback/09_AudioPlayback.ino',
+    'examples/arduino/examples/10_MicRecord/10_MicRecord.ino',
+)
 
 
 class RepositoryPolicyTests(unittest.TestCase):
@@ -79,11 +91,8 @@ class RepositoryPolicyTests(unittest.TestCase):
                 self.assertIn(required, revision_docs)
 
     def test_arduino_surface_and_touch_ci_contract(self) -> None:
-        sketches = (
-            'examples/arduino/examples/01_DisplayColorBars/01_DisplayColorBars.ino',
-            'examples/arduino/examples/02_TouchDrawing/02_TouchDrawing.ino',
-        )
-        for relative in sketches:
+        self.assertEqual(tuple(sorted(ARDUINO_SKETCHES)), ARDUINO_SKETCHES)
+        for relative in ARDUINO_SKETCHES:
             self.assertTrue((ROOT / relative).is_file())
         touch = '\n'.join(
             path.read_text(encoding='utf-8')
@@ -97,7 +106,19 @@ class RepositoryPolicyTests(unittest.TestCase):
         workflow = (ROOT / '.github/workflows/arduino-examples.yml').read_text(encoding='utf-8')
         self.assertIn('ARDUINO_CLI_VERSION: "1.5.1"', workflow)
         self.assertIn('ARDUINO_CORE_VERSION: "3.3.11"', workflow)
+        self.assertIn('compiler.cpp.extra_flags=-DLCD_X_DISPLAY_VARIANT=${{ matrix.display_value }}', workflow)
+        self.assertNotIn('arduino-cli lib install', workflow)
+        self.assertNotIn('LV_CONF_SKIP', workflow)
+        self.assertNotIn('compiler.c.extra_flags=', workflow)
+        self.assertNotIn('compiler.S.extra_flags=', workflow)
         self.assertIn('name: Arduino CI gate', workflow)
+
+        lvgl_properties = (ROOT / 'examples/arduino/libraries/lvgl/library.properties').read_text(encoding='utf-8')
+        self.assertRegex(lvgl_properties, r'(?m)^name=lvgl$')
+        self.assertRegex(lvgl_properties, r'(?m)^version=9\.5\.0$')
+        lv_conf = (ROOT / 'examples/arduino/libraries/lv_conf.h').read_text(encoding='utf-8')
+        self.assertRegex(lv_conf, r'(?m)^#if\s+1\b.*enable')
+        self.assertNotIn('LV_CONF_SKIP', lv_conf)
 
     def test_artifact_and_firmware_workflow_contract(self) -> None:
         packager = (ROOT / '.github/scripts/build_esp_idf_artifact.py').read_text(encoding='utf-8')
@@ -355,6 +376,8 @@ class RepositoryPolicyTests(unittest.TestCase):
         self.assertIn('matrix: ${{ fromJson(needs.discover.outputs.matrix) }}', arduino)
         self.assertIn("if: needs.discover.outputs.has_examples == 'true'", arduino)
         self.assertIn('compiler.cpp.extra_flags=-DLCD_X_DISPLAY_VARIANT=${{ matrix.display_value }}', arduino)
+        self.assertNotIn('arduino-cli lib install', arduino)
+        self.assertNotIn('LV_CONF_SKIP', arduino)
         self.assertIn('name: Arduino CI gate', arduino)
 
     def test_discovery_matrix_and_maintained_firmware_combinations(self) -> None:
@@ -375,7 +398,7 @@ class RepositoryPolicyTests(unittest.TestCase):
         arduino_module = importlib.util.module_from_spec(arduino_spec)
         arduino_spec.loader.exec_module(arduino_module)
         arduino_matrix = arduino_module.build_matrix(arduino_module.list_examples())['include']
-        self.assertEqual(len(arduino_matrix), 6)
+        self.assertEqual(len(arduino_matrix), 30)
 
         firmware = (ROOT / '.github/workflows/maintained-firmware.yml').read_text(encoding='utf-8')
         profiles = re.search(r'revision_profile: \[([^]]+)\]', firmware)

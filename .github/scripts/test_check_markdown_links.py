@@ -50,13 +50,15 @@ class MarkdownLinkTests(unittest.TestCase):
             self.assertEqual(len(failures), 3)
             self.assertTrue(all(failure.startswith("docs/guide.md:") for failure in failures))
 
-    def test_tracked_file_enumeration_is_nul_safe_and_excludes_components(self) -> None:
+    def test_tracked_file_enumeration_is_nul_safe_and_excludes_embedded_trees(self) -> None:
         completed = subprocess.CompletedProcess(
             ["git", "ls-files"],
             0,
             stdout=(
                 b"README.md\0docs/Guide with space.md\0"
                 b"examples/esp-idf/demo/components/upstream/README.md\0"
+                b"examples/arduino/libraries/lvgl/README.md\0"
+                b"docs/libraries-guide.md\0"
             ),
         )
         root = Path("repository").resolve()
@@ -64,7 +66,7 @@ class MarkdownLinkTests(unittest.TestCase):
             selected = links.tracked_first_party_files(root)
         self.assertEqual(
             [path.relative_to(root).as_posix() for path in selected],
-            ["README.md", "docs/Guide with space.md"],
+            ["README.md", "docs/Guide with space.md", "docs/libraries-guide.md"],
         )
 
     def test_tracked_mode_invocation(self) -> None:

@@ -71,6 +71,16 @@ public:
     void fill_screen(uint16_t color);
     void fill_rect(int x, int y, int width, int height, uint16_t color);
     void fill_circle(int x, int y, int radius, uint16_t color);
+    void draw_pixel(int x, int y, uint16_t color);
+    void draw_line(int x0, int y0, int x1, int y1, uint16_t color);
+    void draw_rect(int x, int y, int width, int height, uint16_t color);
+    void draw_rgb565_bitmap(int x, int y, int width, int height,
+                            const uint16_t *pixels,
+                            size_t source_stride_pixels = 0);
+    void draw_char(int x, int y, char c, uint16_t foreground,
+                   uint16_t background, uint8_t scale = 1);
+    void draw_text(int x, int y, const char *text, uint16_t foreground,
+                   uint16_t background, uint8_t scale = 1);
 
     uint16_t width() const { return width_; }
     uint16_t height() const { return height_; }

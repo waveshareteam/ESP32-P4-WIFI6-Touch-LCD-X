@@ -21,6 +21,14 @@ import discover_arduino_examples as discovery  # noqa: E402
 EXAMPLES = (
     "examples/arduino/examples/01_DisplayColorBars",
     "examples/arduino/examples/02_TouchDrawing",
+    "examples/arduino/examples/03_AsciiTable",
+    "examples/arduino/examples/04_LVGLV9",
+    "examples/arduino/examples/05_WiFiAnalyzer",
+    "examples/arduino/examples/06_CameraPreview",
+    "examples/arduino/examples/07_CameraISPTuning",
+    "examples/arduino/examples/08_SDCard",
+    "examples/arduino/examples/09_AudioPlayback",
+    "examples/arduino/examples/10_MicRecord",
 )
 
 
@@ -28,12 +36,38 @@ class ArduinoDiscoveryTests(unittest.TestCase):
     def test_inventory_matches_canonical_sketches(self) -> None:
         self.assertEqual(discovery.CANONICAL_ROOT, Path("examples/arduino/examples"))
         self.assertEqual(tuple(discovery.list_examples()), EXAMPLES)
+        self.assertEqual(tuple(sorted(EXAMPLES)), EXAMPLES)
+        self.assertEqual(
+            tuple(path.name for path in map(Path, EXAMPLES)),
+            (
+                "01_DisplayColorBars",
+                "02_TouchDrawing",
+                "03_AsciiTable",
+                "04_LVGLV9",
+                "05_WiFiAnalyzer",
+                "06_CameraPreview",
+                "07_CameraISPTuning",
+                "08_SDCard",
+                "09_AudioPlayback",
+                "10_MicRecord",
+            ),
+        )
+        actual_directories = tuple(
+            path.as_posix()
+            for path in sorted(discovery.CANONICAL_ROOT.iterdir())
+            if path.is_dir()
+        )
+        self.assertEqual(actual_directories, EXAMPLES)
         for sketch in EXAMPLES:
             self.assertTrue((Path(sketch) / f"{Path(sketch).name}.ino").is_file())
+            self.assertEqual(
+                tuple(path.name for path in Path(sketch).glob("*.ino")),
+                (f"{Path(sketch).name}.ino",),
+            )
 
     def test_full_matrix_compiles_each_sketch_for_three_variants(self) -> None:
         matrix = discovery.build_matrix(list(EXAMPLES))["include"]
-        self.assertEqual(len(matrix), 6)
+        self.assertEqual(len(matrix), 30)
         self.assertEqual(
             {(row["path"], row["display_variant"]) for row in matrix},
             {(example, variant) for example in EXAMPLES for variant, _ in discovery.DISPLAY_VARIANTS},
@@ -59,7 +93,7 @@ class ArduinoDiscoveryTests(unittest.TestCase):
             with self.subTest(path=path):
                 selected = discovery.discover_from_paths([path], set(EXAMPLES))
                 self.assertEqual(selected, list(EXAMPLES))
-                self.assertEqual(len(discovery.build_matrix(selected)["include"]), 6)
+                self.assertEqual(len(discovery.build_matrix(selected)["include"]), 30)
 
     def test_docs_firmware_and_esp_idf_only_paths_do_not_select_arduino(self) -> None:
         for path in (
@@ -117,6 +151,10 @@ class ArduinoDiscoveryTests(unittest.TestCase):
         ):
             with self.subTest(required=required):
                 self.assertIn(required, workflow)
+        self.assertNotIn('arduino-cli lib install', workflow)
+        self.assertNotIn('LV_CONF_SKIP', workflow)
+        self.assertNotIn('compiler.c.extra_flags=', workflow)
+        self.assertNotIn('compiler.S.extra_flags=', workflow)
 
 
 if __name__ == "__main__":

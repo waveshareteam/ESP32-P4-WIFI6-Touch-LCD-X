@@ -6,6 +6,8 @@
 #include "lcd_x_board.h"
 
 #include <algorithm>
+#include <cstdlib>
+#include <limits>
 #include <string.h>
 
 #include "esp_cache.h"
@@ -37,6 +39,7 @@ struct LcdInitCommand {
 };
 
 #include "lcd_x_panel_commands.inc"
+#include "lcd_x_font_8x8.inc"
 
 struct PanelConfig {
     DisplayVariant variant;
@@ -262,6 +265,282 @@ bool send_panel_commands(esp_lcd_panel_io_handle_t io, const PanelConfig &config
     return true;
 }
 
+struct ClippedRect {
+    int left;
+    int top;
+    int right;
+    int bottom;
+};
+
+struct DirtyRect {
+    bool valid = false;
+    int left = 0;
+    int top = 0;
+    int right = 0;
+    int bottom = 0;
+
+    void include(int x, int y, int width, int height)
+    {
+        if (width <= 0 || height <= 0) {
+            return;
+        }
+        const int included_right = x + width;
+        const int included_bottom = y + height;
+        if (!valid) {
+            valid = true;
+            left = x;
+            top = y;
+            right = included_right;
+            bottom = included_bottom;
+            return;
+        }
+        left = std::min(left, x);
+        top = std::min(top, y);
+        right = std::max(right, included_right);
+        bottom = std::max(bottom, included_bottom);
+    }
+};
+
+bool clip_rect(int64_t x, int64_t y, int64_t width, int64_t height,
+               uint16_t display_width, uint16_t display_height, ClippedRect *result)
+{
+    if (result == nullptr || width <= 0 || height <= 0) {
+        return false;
+    }
+
+    const int64_t right = x + width;
+    const int64_t bottom = y + height;
+    const int64_t left = std::max<int64_t>(0, x);
+    const int64_t top = std::max<int64_t>(0, y);
+    const int64_t clipped_right = std::min<int64_t>(display_width, right);
+    const int64_t clipped_bottom = std::min<int64_t>(display_height, bottom);
+    if (left >= clipped_right || top >= clipped_bottom) {
+        return false;
+    }
+
+    result->left = static_cast<int>(left);
+    result->top = static_cast<int>(top);
+    result->right = static_cast<int>(clipped_right);
+    result->bottom = static_cast<int>(clipped_bottom);
+    return true;
+}
+
+bool fill_rect_no_sync(uint16_t *frame_buffer, uint16_t display_width,
+                       uint16_t display_height, int64_t x, int64_t y,
+                       int64_t width, int64_t height, uint16_t color,
+                       DirtyRect *dirty)
+{
+    if (frame_buffer == nullptr || dirty == nullptr) {
+        return false;
+    }
+
+    ClippedRect clipped = {};
+    if (!clip_rect(x, y, width, height, display_width, display_height, &clipped)) {
+        return false;
+    }
+
+    const size_t row_width = static_cast<size_t>(clipped.right - clipped.left);
+    for (int row = clipped.top; row < clipped.bottom; ++row) {
+        uint16_t *start = frame_buffer + static_cast<size_t>(row) * display_width + clipped.left;
+        std::fill_n(start, row_width, color);
+    }
+    dirty->include(clipped.left, clipped.top, clipped.right - clipped.left,
+                   clipped.bottom - clipped.top);
+    return true;
+}
+
+uint8_t line_out_code(double x, double y, uint16_t display_width, uint16_t display_height)
+{
+    constexpr uint8_t kLeft = 0x01;
+    constexpr uint8_t kRight = 0x02;
+    constexpr uint8_t kTop = 0x04;
+    constexpr uint8_t kBottom = 0x08;
+    uint8_t code = 0;
+    if (x < 0.0) {
+        code |= kLeft;
+    } else if (x > static_cast<double>(display_width - 1U)) {
+        code |= kRight;
+    }
+    if (y < 0.0) {
+        code |= kTop;
+    } else if (y > static_cast<double>(display_height - 1U)) {
+        code |= kBottom;
+    }
+    return code;
+}
+
+double snap_line_intersection(double value, double maximum)
+{
+    // Integer endpoints can produce a sub-pixel binary64 residue when an
+    // extreme line intersects a display corner. Snap only that tiny residue;
+    // genuinely out-of-bounds intersections remain available for the next
+    // Cohen-Sutherland iteration.
+    constexpr double kBoundaryEpsilon = 0.00001;
+    if (value < 0.0 && value >= -kBoundaryEpsilon) {
+        return 0.0;
+    }
+    if (value > maximum && value <= maximum + kBoundaryEpsilon) {
+        return maximum;
+    }
+    return value;
+}
+
+bool clip_line(int x0, int y0, int x1, int y1, uint16_t display_width,
+               uint16_t display_height, int *clipped_x0, int *clipped_y0,
+               int *clipped_x1, int *clipped_y1)
+{
+    if (display_width == 0 || display_height == 0 || clipped_x0 == nullptr ||
+        clipped_y0 == nullptr || clipped_x1 == nullptr || clipped_y1 == nullptr) {
+        return false;
+    }
+
+    constexpr uint8_t kLeft = 0x01;
+    constexpr uint8_t kRight = 0x02;
+    constexpr uint8_t kTop = 0x04;
+    constexpr uint8_t kBottom = 0x08;
+    double start_x = x0;
+    double start_y = y0;
+    double end_x = x1;
+    double end_y = y1;
+    const double maximum_x = static_cast<double>(display_width - 1U);
+    const double maximum_y = static_cast<double>(display_height - 1U);
+
+    // Cohen-Sutherland clipping limits the subsequent Bresenham loop to the
+    // physical display bounds even when callers provide INT_MIN/INT_MAX.
+    for (unsigned int iteration = 0; iteration < 8; ++iteration) {
+        const uint8_t start_code = line_out_code(start_x, start_y, display_width,
+                                                 display_height);
+        const uint8_t end_code = line_out_code(end_x, end_y, display_width,
+                                               display_height);
+        if ((start_code | end_code) == 0) {
+            *clipped_x0 = std::clamp(static_cast<int>(start_x + 0.5), 0,
+                                     static_cast<int>(display_width) - 1);
+            *clipped_y0 = std::clamp(static_cast<int>(start_y + 0.5), 0,
+                                     static_cast<int>(display_height) - 1);
+            *clipped_x1 = std::clamp(static_cast<int>(end_x + 0.5), 0,
+                                     static_cast<int>(display_width) - 1);
+            *clipped_y1 = std::clamp(static_cast<int>(end_y + 0.5), 0,
+                                     static_cast<int>(display_height) - 1);
+            return true;
+        }
+        if ((start_code & end_code) != 0) {
+            return false;
+        }
+
+        const uint8_t outside = start_code != 0 ? start_code : end_code;
+        double x = 0.0;
+        double y = 0.0;
+        if ((outside & kTop) != 0) {
+            if (end_y == start_y) {
+                return false;
+            }
+            x = start_x + (end_x - start_x) * (-start_y) / (end_y - start_y);
+            y = 0.0;
+        } else if ((outside & kBottom) != 0) {
+            if (end_y == start_y) {
+                return false;
+            }
+            x = start_x + (end_x - start_x) * (maximum_y - start_y) /
+                              (end_y - start_y);
+            y = maximum_y;
+        } else if ((outside & kRight) != 0) {
+            if (end_x == start_x) {
+                return false;
+            }
+            y = start_y + (end_y - start_y) * (maximum_x - start_x) /
+                              (end_x - start_x);
+            x = maximum_x;
+        } else if ((outside & kLeft) != 0) {
+            if (end_x == start_x) {
+                return false;
+            }
+            y = start_y + (end_y - start_y) * (-start_x) / (end_x - start_x);
+            x = 0.0;
+        }
+
+        x = snap_line_intersection(x, maximum_x);
+        y = snap_line_intersection(y, maximum_y);
+
+        if (outside == start_code) {
+            start_x = x;
+            start_y = y;
+        } else {
+            end_x = x;
+            end_y = y;
+        }
+    }
+    return false;
+}
+
+bool draw_line_no_sync(uint16_t *frame_buffer, uint16_t display_width,
+                       uint16_t display_height, int x0, int y0, int x1, int y1,
+                       uint16_t color, DirtyRect *dirty)
+{
+    if (frame_buffer == nullptr || dirty == nullptr) {
+        return false;
+    }
+
+    int clipped_x0 = 0;
+    int clipped_y0 = 0;
+    int clipped_x1 = 0;
+    int clipped_y1 = 0;
+    if (!clip_line(x0, y0, x1, y1, display_width, display_height, &clipped_x0,
+                   &clipped_y0, &clipped_x1, &clipped_y1)) {
+        return false;
+    }
+
+    const int delta_x = std::abs(clipped_x1 - clipped_x0);
+    const int step_x = clipped_x0 < clipped_x1 ? 1 : -1;
+    const int delta_y = -std::abs(clipped_y1 - clipped_y0);
+    const int step_y = clipped_y0 < clipped_y1 ? 1 : -1;
+    int error = delta_x + delta_y;
+    int current_x = clipped_x0;
+    int current_y = clipped_y0;
+    while (true) {
+        frame_buffer[static_cast<size_t>(current_y) * display_width + current_x] = color;
+        if (current_x == clipped_x1 && current_y == clipped_y1) {
+            break;
+        }
+        const int double_error = error * 2;
+        if (double_error >= delta_y) {
+            error += delta_y;
+            current_x += step_x;
+        }
+        if (double_error <= delta_x) {
+            error += delta_x;
+            current_y += step_y;
+        }
+    }
+    dirty->include(std::min(clipped_x0, clipped_x1), std::min(clipped_y0, clipped_y1),
+                   delta_x + 1, -delta_y + 1);
+    return true;
+}
+
+void draw_glyph_no_sync(uint16_t *frame_buffer, uint16_t display_width,
+                        uint16_t display_height, int64_t x, int64_t y,
+                        unsigned char character, uint16_t foreground,
+                        uint16_t background, uint8_t scale, DirtyRect *dirty)
+{
+    if (frame_buffer == nullptr || dirty == nullptr || scale == 0) {
+        return;
+    }
+    if (character > 0x7FU) {
+        character = static_cast<unsigned char>('?');
+    }
+
+    for (int row = 0; row < 8; ++row) {
+        const uint8_t bits = kFont8x8Basic[character][row];
+        for (int column = 0; column < 8; ++column) {
+            const uint16_t color = (bits & (UINT8_C(1) << column)) != 0 ? foreground
+                                                                          : background;
+            fill_rect_no_sync(frame_buffer, display_width, display_height,
+                              x + static_cast<int64_t>(column) * scale,
+                              y + static_cast<int64_t>(row) * scale, scale, scale,
+                              color, dirty);
+        }
+    }
+}
+
 }  // namespace
 
 bool Display::begin(DisplayVariant variant)
@@ -476,15 +755,184 @@ void Display::fill_circle(int x, int y, int radius, uint16_t color)
     }
 }
 
+void Display::draw_pixel(int x, int y, uint16_t color)
+{
+    DirtyRect dirty = {};
+    if (fill_rect_no_sync(frame_buffer_, width_, height_, x, y, 1, 1, color, &dirty) &&
+        dirty.valid) {
+        sync_rect(dirty.left, dirty.top, dirty.right - dirty.left,
+                  dirty.bottom - dirty.top);
+    }
+}
+
+void Display::draw_line(int x0, int y0, int x1, int y1, uint16_t color)
+{
+    DirtyRect dirty = {};
+    if (draw_line_no_sync(frame_buffer_, width_, height_, x0, y0, x1, y1, color,
+                          &dirty) &&
+        dirty.valid) {
+        sync_rect(dirty.left, dirty.top, dirty.right - dirty.left,
+                  dirty.bottom - dirty.top);
+    }
+}
+
+void Display::draw_rect(int x, int y, int width, int height, uint16_t color)
+{
+    if (frame_buffer_ == nullptr || width <= 0 || height <= 0) {
+        return;
+    }
+
+    const int64_t right = static_cast<int64_t>(x) + width - 1;
+    const int64_t bottom = static_cast<int64_t>(y) + height - 1;
+    const auto saturate_to_int = [](int64_t value) {
+        if (value > std::numeric_limits<int>::max()) {
+            return std::numeric_limits<int>::max();
+        }
+        if (value < std::numeric_limits<int>::min()) {
+            return std::numeric_limits<int>::min();
+        }
+        return static_cast<int>(value);
+    };
+
+    const int right_edge = saturate_to_int(right);
+    const int bottom_edge = saturate_to_int(bottom);
+    DirtyRect dirty = {};
+    if (width == 1) {
+        draw_line_no_sync(frame_buffer_, width_, height_, x, y, x, bottom_edge, color,
+                          &dirty);
+    } else if (height == 1) {
+        draw_line_no_sync(frame_buffer_, width_, height_, x, y, right_edge, y, color,
+                          &dirty);
+    } else {
+        draw_line_no_sync(frame_buffer_, width_, height_, x, y, right_edge, y, color,
+                          &dirty);
+        draw_line_no_sync(frame_buffer_, width_, height_, x, bottom_edge, right_edge,
+                          bottom_edge, color, &dirty);
+        draw_line_no_sync(frame_buffer_, width_, height_, x, y, x, bottom_edge, color,
+                          &dirty);
+        draw_line_no_sync(frame_buffer_, width_, height_, right_edge, y, right_edge,
+                          bottom_edge, color, &dirty);
+    }
+    if (dirty.valid) {
+        sync_rect(dirty.left, dirty.top, dirty.right - dirty.left,
+                  dirty.bottom - dirty.top);
+    }
+}
+
+void Display::draw_rgb565_bitmap(int x, int y, int width, int height,
+                                 const uint16_t *pixels,
+                                 size_t source_stride_pixels)
+{
+    if (frame_buffer_ == nullptr || pixels == nullptr || width <= 0 || height <= 0) {
+        return;
+    }
+
+    const size_t source_stride = source_stride_pixels == 0
+                                     ? static_cast<size_t>(width)
+                                     : source_stride_pixels;
+    if (source_stride < static_cast<size_t>(width)) {
+        return;
+    }
+
+    ClippedRect clipped = {};
+    if (!clip_rect(x, y, width, height, width_, height_, &clipped)) {
+        return;
+    }
+
+    const size_t source_x = static_cast<size_t>(static_cast<int64_t>(clipped.left) - x);
+    const size_t source_y = static_cast<size_t>(static_cast<int64_t>(clipped.top) - y);
+    const size_t copied_width = static_cast<size_t>(clipped.right - clipped.left);
+    const size_t copied_height = static_cast<size_t>(clipped.bottom - clipped.top);
+    const size_t last_source_row = source_y + copied_height - 1;
+    const size_t last_source_column = source_x + copied_width - 1;
+    if (last_source_row > std::numeric_limits<size_t>::max() / source_stride) {
+        return;
+    }
+    const size_t last_source_index_base = last_source_row * source_stride;
+    if (last_source_column > std::numeric_limits<size_t>::max() -
+                                 last_source_index_base) {
+        return;
+    }
+
+    for (size_t row = 0; row < copied_height; ++row) {
+        const size_t source_index = (source_y + row) * source_stride + source_x;
+        uint16_t *destination = frame_buffer_ +
+                                static_cast<size_t>(clipped.top + static_cast<int>(row)) *
+                                    width_ +
+                                clipped.left;
+        std::copy_n(pixels + source_index, copied_width, destination);
+    }
+    sync_rect(clipped.left, clipped.top, clipped.right - clipped.left,
+              clipped.bottom - clipped.top);
+}
+
+void Display::draw_char(int x, int y, char c, uint16_t foreground,
+                        uint16_t background, uint8_t scale)
+{
+    DirtyRect dirty = {};
+    draw_glyph_no_sync(frame_buffer_, width_, height_, x, y,
+                       static_cast<unsigned char>(c), foreground, background, scale,
+                       &dirty);
+    if (dirty.valid) {
+        sync_rect(dirty.left, dirty.top, dirty.right - dirty.left,
+                  dirty.bottom - dirty.top);
+    }
+}
+
+void Display::draw_text(int x, int y, const char *text, uint16_t foreground,
+                        uint16_t background, uint8_t scale)
+{
+    if (frame_buffer_ == nullptr || text == nullptr || scale == 0) {
+        return;
+    }
+
+    constexpr size_t kMaximumCharacters = 8192;
+    const int64_t glyph_advance = static_cast<int64_t>(8) * scale;
+    const int64_t origin_x = x;
+    int64_t cursor_x = x;
+    int64_t cursor_y = y;
+    DirtyRect dirty = {};
+    for (size_t index = 0; index < kMaximumCharacters && text[index] != '\0'; ++index) {
+        const unsigned char character = static_cast<unsigned char>(text[index]);
+        if (character == '\r') {
+            continue;
+        }
+        if (character == '\n') {
+            cursor_x = origin_x;
+            cursor_y += glyph_advance;
+            continue;
+        }
+        draw_glyph_no_sync(frame_buffer_, width_, height_, cursor_x, cursor_y, character,
+                           foreground, background, scale, &dirty);
+        cursor_x += glyph_advance;
+    }
+    if (dirty.valid) {
+        sync_rect(dirty.left, dirty.top, dirty.right - dirty.left,
+                  dirty.bottom - dirty.top);
+    }
+}
+
 void Display::sync_rect(int x, int y, int width, int height)
 {
-    for (int row = y; row < y + height; ++row) {
-        void *start = frame_buffer_ + static_cast<size_t>(row) * width_ + x;
-        check_esp(esp_cache_msync(
-                      start, static_cast<size_t>(width) * sizeof(uint16_t),
-                      ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_UNALIGNED),
-                  "frame buffer sync");
+    if (frame_buffer_ == nullptr) {
+        return;
     }
+    ClippedRect clipped = {};
+    if (!clip_rect(x, y, width, height, width_, height_, &clipped)) {
+        return;
+    }
+    const size_t first_pixel = static_cast<size_t>(clipped.top) * width_ +
+                               clipped.left;
+    const size_t end_pixel = static_cast<size_t>(clipped.bottom - 1) * width_ +
+                             clipped.right;
+    // The frame buffer is contiguous. Synchronizing the bounding linear span
+    // may include unchanged pixels between partial rows, but avoids one cache
+    // operation per row for camera and LVGL updates.
+    check_esp(esp_cache_msync(
+                  frame_buffer_ + first_pixel,
+                  (end_pixel - first_pixel) * sizeof(uint16_t),
+                  ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_UNALIGNED),
+              "frame buffer sync");
 }
 
 bool Touch::begin(uint16_t width, uint16_t height)
