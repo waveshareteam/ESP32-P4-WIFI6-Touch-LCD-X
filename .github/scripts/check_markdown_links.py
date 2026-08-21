@@ -82,7 +82,8 @@ def tracked_first_party_files(root: Path) -> list[Path]:
     return [
         root / path
         for path in paths
-        if "components" not in path.parts and "libraries" not in path.parts
+        if "components" not in path.parts
+        and path.parts[:3] != ("examples", "arduino", "libraries")
     ]
 
 

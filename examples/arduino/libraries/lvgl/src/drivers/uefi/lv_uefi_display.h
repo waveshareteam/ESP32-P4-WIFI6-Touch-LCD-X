@@ -63,4 +63,3 @@ void * lv_uefi_display_get_any(void);
 #endif
 
 #endif //__LV_UEFI_DISPLAY_H__
-

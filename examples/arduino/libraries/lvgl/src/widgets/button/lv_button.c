@@ -1,5 +1,5 @@
 /**
- * @file lv_button.c
+ * @file lv_btn.c
  *
  */
 

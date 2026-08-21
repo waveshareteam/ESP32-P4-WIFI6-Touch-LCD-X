@@ -25,33 +25,29 @@ extern "C" {
  *      TYPEDEFS
  **********************/
 
-typedef struct _lv_tree_class_t lv_tree_class_t;
-typedef struct _lv_tree_node_t lv_tree_node_t;
-
-typedef void (*lv_tree_constructor_cb_t)(const lv_tree_class_t * class_p, lv_tree_node_t * node);
-typedef void (*lv_tree_destructor_cb_t)(const lv_tree_class_t * class_p, lv_tree_node_t * node);
+struct _lv_tree_node_t;
 
 /**
  * Describe the common methods of every object.
  * Similar to a C++ class.
  */
-struct _lv_tree_class_t {
-    const lv_tree_class_t * base_class;
+typedef struct _lv_tree_class_t {
+    const struct _lv_tree_class_t * base_class;
     uint32_t instance_size;
-    lv_tree_constructor_cb_t constructor_cb;
-    lv_tree_destructor_cb_t destructor_cb;
-};
+    void (*constructor_cb)(const struct _lv_tree_class_t * class_p, struct _lv_tree_node_t * node);
+    void (*destructor_cb)(const struct _lv_tree_class_t * class_p, struct _lv_tree_node_t * node);
+} lv_tree_class_t;
 
 /** Description of a tree node*/
-struct _lv_tree_node_t {
-    lv_tree_node_t * parent;
-    lv_tree_node_t ** children;
+typedef struct _lv_tree_node_t {
+    struct _lv_tree_node_t * parent;
+    struct _lv_tree_node_t ** children;
     uint32_t child_cnt;
     uint32_t child_cap;
-    const lv_tree_class_t * class_p;
-};
+    const struct _lv_tree_class_t * class_p;
+} lv_tree_node_t;
 
-enum _lv_tree_walk_mode_t {
+enum {
     LV_TREE_WALK_PRE_ORDER = 0,
     LV_TREE_WALK_POST_ORDER,
 };

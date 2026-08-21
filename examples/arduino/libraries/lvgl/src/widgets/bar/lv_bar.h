@@ -20,7 +20,6 @@ extern "C" {
 #include "../../core/lv_obj.h"
 #include "../../misc/lv_anim.h"
 #include "../label/lv_label.h"
-#include "../../core/lv_observer.h"
 
 /*********************
  *      DEFINES
@@ -42,18 +41,6 @@ typedef enum {
 } lv_bar_orientation_t;
 
 LV_ATTRIBUTE_EXTERN_DATA extern const lv_obj_class_t lv_bar_class;
-
-#if LV_USE_OBJ_PROPERTY
-enum _lv_property_bar_id_t {
-    LV_PROPERTY_ID(BAR, VALUE,          LV_PROPERTY_TYPE_INT,   0),
-    LV_PROPERTY_ID(BAR, START_VALUE,    LV_PROPERTY_TYPE_INT,   1),
-    LV_PROPERTY_ID(BAR, MIN_VALUE,      LV_PROPERTY_TYPE_INT,   2),
-    LV_PROPERTY_ID(BAR, MAX_VALUE,      LV_PROPERTY_TYPE_INT,   3),
-    LV_PROPERTY_ID(BAR, MODE,           LV_PROPERTY_TYPE_INT,   4),
-    LV_PROPERTY_ID(BAR, ORIENTATION,    LV_PROPERTY_TYPE_INT,   5),
-    LV_PROPERTY_BAR_END,
-};
-#endif
 
 /**********************
  * GLOBAL PROTOTYPES
@@ -94,20 +81,6 @@ void lv_bar_set_start_value(lv_obj_t * obj, int32_t start_value, lv_anim_enable_
  * @note If min is greater than max, the drawing direction becomes to the opposite direction.
  */
 void lv_bar_set_range(lv_obj_t * obj, int32_t min, int32_t max);
-
-/**
- * Set minimum value of a bar
- * @param obj       pointer to the bar object
- * @param min       minimum value
- */
-void lv_bar_set_min_value(lv_obj_t * obj, int32_t min);
-
-/**
- * Set maximum value of a bar
- * @param obj       pointer to the bar object
- * @param max       maximum value
- */
-void lv_bar_set_max_value(lv_obj_t * obj, int32_t max);
 
 /**
  * Set the type of bar.
@@ -175,16 +148,6 @@ lv_bar_orientation_t lv_bar_get_orientation(lv_obj_t * obj);
  * @return          true: in symmetrical mode false : not in
 */
 bool lv_bar_is_symmetrical(lv_obj_t * obj);
-
-#if LV_USE_OBSERVER
-/**
- * Bind an integer or float Subject to a Bar's value.
- * @param obj       pointer to Bar
- * @param subject   pointer to Subject
- * @return          pointer to newly-created Observer
- */
-lv_observer_t * lv_bar_bind_value(lv_obj_t * obj, lv_subject_t * subject);
-#endif
 
 /**********************
  *      MACROS

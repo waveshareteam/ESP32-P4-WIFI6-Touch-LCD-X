@@ -54,10 +54,10 @@ typedef struct {
  *  STATIC PROTOTYPES
  **********************/
 static void grid_update(lv_obj_t * cont, void * user_data);
-static lv_result_t calc(lv_obj_t * obj, lv_grid_calc_t * calc);
+static void calc(lv_obj_t * obj, lv_grid_calc_t * calc);
 static void calc_free(lv_grid_calc_t * calc);
-static lv_result_t calc_cols(lv_obj_t * cont, lv_grid_calc_t * c);
-static lv_result_t calc_rows(lv_obj_t * cont, lv_grid_calc_t * c);
+static void calc_cols(lv_obj_t * cont, lv_grid_calc_t * c);
+static void calc_rows(lv_obj_t * cont, lv_grid_calc_t * c);
 static void item_repos(lv_obj_t * item, lv_grid_calc_t * c, item_repos_hint_t * hint);
 static int32_t grid_align(int32_t cont_size, bool auto_size, lv_grid_align_t align, int32_t gap,
                           uint32_t track_num,
@@ -66,43 +66,43 @@ static uint32_t count_tracks(const int32_t * templ);
 
 static inline const int32_t * get_col_dsc(lv_obj_t * obj)
 {
-    return lv_obj_get_style_grid_column_dsc_array(obj, LV_PART_MAIN);
+    return lv_obj_get_style_grid_column_dsc_array(obj, 0);
 }
 static inline const int32_t * get_row_dsc(lv_obj_t * obj)
 {
-    return lv_obj_get_style_grid_row_dsc_array(obj, LV_PART_MAIN);
+    return lv_obj_get_style_grid_row_dsc_array(obj, 0);
 }
 static inline int32_t get_col_pos(lv_obj_t * obj)
 {
-    return lv_obj_get_style_grid_cell_column_pos(obj, LV_PART_MAIN);
+    return lv_obj_get_style_grid_cell_column_pos(obj, 0);
 }
 static inline int32_t get_row_pos(lv_obj_t * obj)
 {
-    return lv_obj_get_style_grid_cell_row_pos(obj, LV_PART_MAIN);
+    return lv_obj_get_style_grid_cell_row_pos(obj, 0);
 }
 static inline int32_t get_col_span(lv_obj_t * obj)
 {
-    return lv_obj_get_style_grid_cell_column_span(obj, LV_PART_MAIN);
+    return lv_obj_get_style_grid_cell_column_span(obj, 0);
 }
 static inline int32_t get_row_span(lv_obj_t * obj)
 {
-    return lv_obj_get_style_grid_cell_row_span(obj, LV_PART_MAIN);
+    return lv_obj_get_style_grid_cell_row_span(obj, 0);
 }
 static inline lv_grid_align_t get_cell_col_align(lv_obj_t * obj)
 {
-    return lv_obj_get_style_grid_cell_x_align(obj, LV_PART_MAIN);
+    return lv_obj_get_style_grid_cell_x_align(obj, 0);
 }
 static inline lv_grid_align_t get_cell_row_align(lv_obj_t * obj)
 {
-    return lv_obj_get_style_grid_cell_y_align(obj, LV_PART_MAIN);
+    return lv_obj_get_style_grid_cell_y_align(obj, 0);
 }
 static inline lv_grid_align_t get_grid_col_align(lv_obj_t * obj)
 {
-    return lv_obj_get_style_grid_column_align(obj, LV_PART_MAIN);
+    return lv_obj_get_style_grid_column_align(obj, 0);
 }
 static inline lv_grid_align_t get_grid_row_align(lv_obj_t * obj)
 {
-    return lv_obj_get_style_grid_row_align(obj, LV_PART_MAIN);
+    return lv_obj_get_style_grid_row_align(obj, 0);
 }
 static inline int32_t get_margin_hor(lv_obj_t * obj)
 {
@@ -143,8 +143,7 @@ static inline int32_t lv_div_round_closest(int32_t dividend, int32_t divisor)
 
 void lv_grid_init(void)
 {
-    layout_list_def[LV_LAYOUT_GRID].callbacks.layout_update_cb = grid_update;
-    layout_list_def[LV_LAYOUT_GRID].callbacks.get_min_size_cb = NULL;
+    layout_list_def[LV_LAYOUT_GRID].cb = grid_update;
     layout_list_def[LV_LAYOUT_GRID].user_data = NULL;
 }
 
@@ -190,9 +189,12 @@ static void grid_update(lv_obj_t * cont, void * user_data)
     LV_LOG_INFO("update %p container", (void *)cont);
     LV_UNUSED(user_data);
 
+    //    const int32_t * col_templ = get_col_dsc(cont);
+    //    const int32_t * row_templ = get_row_dsc(cont);
+    //    if(col_templ == NULL || row_templ == NULL) return;
+
     lv_grid_calc_t c;
-    lv_result_t res = calc(cont, &c);
-    if(res != LV_RESULT_OK) return;
+    calc(cont, &c);
 
     item_repos_hint_t hint;
     lv_memzero(&hint, sizeof(hint));
@@ -228,21 +230,15 @@ static void grid_update(lv_obj_t * cont, void * user_data)
  * @param calc store the calculated cells sizes here
  * @note `lv_grid_calc_free(calc_out)` needs to be called when `calc_out` is not needed anymore
  */
-static lv_result_t calc(lv_obj_t * cont, lv_grid_calc_t * calc_out)
+static void calc(lv_obj_t * cont, lv_grid_calc_t * calc_out)
 {
     if(lv_obj_get_child(cont, 0) == NULL) {
         lv_memzero(calc_out, sizeof(lv_grid_calc_t));
-        return LV_RESULT_INVALID;
+        return;
     }
 
-    if(calc_rows(cont, calc_out) == LV_RESULT_INVALID) {
-        /* Warning is already logged inside `calc_rows` */
-        return LV_RESULT_INVALID;
-    }
-    if(calc_cols(cont, calc_out) == LV_RESULT_INVALID) {
-        /* Warning is already logged inside `calc_cols` */
-        return LV_RESULT_INVALID;
-    }
+    calc_rows(cont, calc_out);
+    calc_cols(cont, calc_out);
 
     int32_t col_gap = lv_obj_get_style_pad_column(cont, LV_PART_MAIN);
     int32_t row_gap = lv_obj_get_style_pad_row(cont, LV_PART_MAIN);
@@ -262,7 +258,6 @@ static lv_result_t calc(lv_obj_t * cont, lv_grid_calc_t * calc_out)
                                   calc_out->y, false);
 
     LV_ASSERT_MEM_INTEGRITY();
-    return LV_RESULT_OK;
 }
 
 /**
@@ -277,7 +272,7 @@ static void calc_free(lv_grid_calc_t * calc)
     lv_free(calc->h);
 }
 
-static lv_result_t calc_cols(lv_obj_t * cont, lv_grid_calc_t * c)
+static void calc_cols(lv_obj_t * cont, lv_grid_calc_t * c)
 {
 
     const int32_t * col_templ;
@@ -288,7 +283,7 @@ static lv_result_t calc_cols(lv_obj_t * cont, lv_grid_calc_t * c)
         col_templ = get_col_dsc(parent);
         if(col_templ == NULL) {
             LV_LOG_WARN("No col descriptor found even on the parent");
-            return LV_RESULT_INVALID;
+            return;
         }
 
         int32_t pos = get_col_pos(cont);
@@ -368,10 +363,9 @@ static lv_result_t calc_cols(lv_obj_t * cont, lv_grid_calc_t * c)
     if(subgrid) {
         lv_free((void *)col_templ);
     }
-    return LV_RESULT_OK;
 }
 
-static lv_result_t calc_rows(lv_obj_t * cont, lv_grid_calc_t * c)
+static void calc_rows(lv_obj_t * cont, lv_grid_calc_t * c)
 {
     const int32_t * row_templ;
     row_templ = get_row_dsc(cont);
@@ -381,7 +375,7 @@ static lv_result_t calc_rows(lv_obj_t * cont, lv_grid_calc_t * c)
         row_templ = get_row_dsc(parent);
         if(row_templ == NULL) {
             LV_LOG_WARN("No row descriptor found even on the parent");
-            return LV_RESULT_INVALID;
+            return;
         }
 
         int32_t pos = get_row_pos(cont);
@@ -458,7 +452,6 @@ static lv_result_t calc_rows(lv_obj_t * cont, lv_grid_calc_t * c)
     if(subgrid) {
         lv_free((void *)row_templ);
     }
-    return LV_RESULT_OK;
 }
 
 /**
@@ -475,27 +468,14 @@ static void item_repos(lv_obj_t * item, lv_grid_calc_t * c, item_repos_hint_t * 
     uint32_t row_span = get_row_span(item);
     if(row_span == 0 || col_span == 0) return;
 
-    bool rev = lv_obj_get_style_base_dir(lv_obj_get_parent(item), LV_PART_MAIN) == LV_BASE_DIR_RTL;
-
     uint32_t col_pos = get_col_pos(item);
     uint32_t row_pos = get_row_pos(item);
     lv_grid_align_t col_align = get_cell_col_align(item);
     lv_grid_align_t row_align = get_cell_row_align(item);
 
-    int32_t col_x1 = 0;
-    int32_t col_x2 = 0;
-    int32_t col_w = 0;
-
-    if(rev && col_span > 1) {
-        col_x1 = c->x[col_pos + col_span - 1];
-        col_x2 = c->x[col_pos] + c->w[col_pos];
-        col_w = col_x2 - col_x1;
-    }
-    else {
-        col_x1 = c->x[col_pos];
-        col_x2 = c->x[col_pos + col_span - 1] + c->w[col_pos + col_span - 1];
-        col_w = col_x2 - col_x1;
-    }
+    int32_t col_x1 = c->x[col_pos];
+    int32_t col_x2 = c->x[col_pos + col_span - 1] + c->w[col_pos + col_span - 1];
+    int32_t col_w = col_x2 - col_x1;
 
     int32_t row_y1 = c->y[row_pos];
     int32_t row_y2 = c->y[row_pos + row_span - 1] + c->h[row_pos + row_span - 1];
@@ -511,8 +491,6 @@ static void item_repos(lv_obj_t * item, lv_grid_calc_t * c, item_repos_hint_t * 
     int32_t y;
     int32_t item_w = lv_area_get_width(&item->coords);
     int32_t item_h = lv_area_get_height(&item->coords);
-
-    col_pos = rev && col_span > 1 ? col_pos + col_span - 1 : col_pos;
 
     switch(col_align) {
         default:

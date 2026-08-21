@@ -79,9 +79,7 @@ static inline uint16_t /* LV_ATTRIBUTE_FAST_MEM */ lv_color_24_16_mix(const uint
 
 static inline void * /* LV_ATTRIBUTE_FAST_MEM */ drawbuf_next_row(const void * buf, uint32_t stride);
 
-#if LV_DRAW_SW_SUPPORT_RGB565_SWAPPED
-    static inline lv_color16_t /* LV_ATTRIBUTE_FAST_MEM */ lv_color16_from_u16(uint16_t raw);
-#endif
+static inline lv_color16_t /* LV_ATTRIBUTE_FAST_MEM */ lv_color16_from_u16(uint16_t raw);
 
 /**********************
  *  STATIC VARIABLES
@@ -153,22 +151,6 @@ static inline void * /* LV_ATTRIBUTE_FAST_MEM */ drawbuf_next_row(const void * b
 
 #ifndef LV_DRAW_SW_RGB565_BLEND_NORMAL_TO_RGB565_MIX_MASK_OPA
     #define LV_DRAW_SW_RGB565_BLEND_NORMAL_TO_RGB565_MIX_MASK_OPA(...)      LV_RESULT_INVALID
-#endif
-
-#ifndef LV_DRAW_SW_RGB565_SWAPPED_BLEND_NORMAL_TO_RGB565
-    #define LV_DRAW_SW_RGB565_SWAPPED_BLEND_NORMAL_TO_RGB565(...)                   LV_RESULT_INVALID
-#endif
-
-#ifndef LV_DRAW_SW_RGB565_SWAPPED_BLEND_NORMAL_TO_RGB565_WITH_OPA
-    #define LV_DRAW_SW_RGB565_SWAPPED_BLEND_NORMAL_TO_RGB565_WITH_OPA(...)          LV_RESULT_INVALID
-#endif
-
-#ifndef LV_DRAW_SW_RGB565_SWAPPED_BLEND_NORMAL_TO_RGB565_WITH_MASK
-    #define LV_DRAW_SW_RGB565_SWAPPED_BLEND_NORMAL_TO_RGB565_WITH_MASK(...)         LV_RESULT_INVALID
-#endif
-
-#ifndef LV_DRAW_SW_RGB565_SWAPPED_BLEND_NORMAL_TO_RGB565_MIX_MASK_OPA
-    #define LV_DRAW_SW_RGB565_SWAPPED_BLEND_NORMAL_TO_RGB565_MIX_MASK_OPA(...)      LV_RESULT_INVALID
 #endif
 
 #ifndef LV_DRAW_SW_RGB888_BLEND_NORMAL_TO_RGB565
@@ -949,7 +931,7 @@ static void LV_ATTRIBUTE_FAST_MEM rgb565_swapped_image_blend(lv_draw_sw_blend_im
 
     if(dsc->blend_mode == LV_BLEND_MODE_NORMAL) {
         if(mask_buf == NULL && opa >= LV_OPA_MAX) {
-            if(LV_RESULT_INVALID == LV_DRAW_SW_RGB565_SWAPPED_BLEND_NORMAL_TO_RGB565(dsc)) {
+            if(LV_RESULT_INVALID == LV_DRAW_SW_RGB565_BLEND_NORMAL_TO_RGB565(dsc)) {
                 uint32_t line_in_bytes = w * 2;
                 for(y = 0; y < h; y++) {
                     lv_memcpy(dest_buf_u16, src_buf_u16, line_in_bytes);
@@ -960,7 +942,7 @@ static void LV_ATTRIBUTE_FAST_MEM rgb565_swapped_image_blend(lv_draw_sw_blend_im
             }
         }
         else if(mask_buf == NULL && opa < LV_OPA_MAX) {
-            if(LV_RESULT_INVALID == LV_DRAW_SW_RGB565_SWAPPED_BLEND_NORMAL_TO_RGB565_WITH_OPA(dsc)) {
+            if(LV_RESULT_INVALID == LV_DRAW_SW_RGB565_BLEND_NORMAL_TO_RGB565_WITH_OPA(dsc)) {
                 for(y = 0; y < h; y++) {
                     for(x = 0; x < w; x++) {
                         dest_buf_u16[x] = lv_color_16_16_mix(lv_color_swap_16(src_buf_u16[x]), dest_buf_u16[x], opa);
@@ -971,7 +953,7 @@ static void LV_ATTRIBUTE_FAST_MEM rgb565_swapped_image_blend(lv_draw_sw_blend_im
             }
         }
         else if(mask_buf && opa >= LV_OPA_MAX) {
-            if(LV_RESULT_INVALID == LV_DRAW_SW_RGB565_SWAPPED_BLEND_NORMAL_TO_RGB565_WITH_MASK(dsc)) {
+            if(LV_RESULT_INVALID == LV_DRAW_SW_RGB565_BLEND_NORMAL_TO_RGB565_WITH_MASK(dsc)) {
                 for(y = 0; y < h; y++) {
                     for(x = 0; x < w; x++) {
                         dest_buf_u16[x] = lv_color_16_16_mix(lv_color_swap_16(src_buf_u16[x]), dest_buf_u16[x], mask_buf[x]);
@@ -983,7 +965,7 @@ static void LV_ATTRIBUTE_FAST_MEM rgb565_swapped_image_blend(lv_draw_sw_blend_im
             }
         }
         else {
-            if(LV_RESULT_INVALID == LV_DRAW_SW_RGB565_SWAPPED_BLEND_NORMAL_TO_RGB565_MIX_MASK_OPA(dsc)) {
+            if(LV_RESULT_INVALID == LV_DRAW_SW_RGB565_BLEND_NORMAL_TO_RGB565_MIX_MASK_OPA(dsc)) {
                 for(y = 0; y < h; y++) {
                     for(x = 0; x < w; x++) {
                         dest_buf_u16[x] = lv_color_16_16_mix(lv_color_swap_16(src_buf_u16[x]), dest_buf_u16[x], LV_OPA_MIX2(mask_buf[x], opa));
@@ -1334,7 +1316,7 @@ static void LV_ATTRIBUTE_FAST_MEM argb8888_premultiplied_image_blend(lv_draw_sw_
             if(LV_RESULT_INVALID == LV_DRAW_SW_ARGB8888_PREMULTIPLIED_BLEND_NORMAL_TO_RGB565(dsc)) {
                 for(y = 0; y < h; y++) {
                     for(dest_x = 0, src_x = 0; dest_x < w; dest_x++, src_x += 4) {
-                        /*For the trivial case use the premultiplied image as it is.
+                        /*For the trivial case use the premultipled image as it is.
                          *For the other cases unpremultiply as another alpha also needs to be applied.*/
                         dest_buf_u16[dest_x] = lv_color_24_16_mix_premult(&src_buf_u8[src_x], dest_buf_u16[dest_x], src_buf_u8[src_x + 3]);
                     }
@@ -1515,7 +1497,6 @@ static inline void * LV_ATTRIBUTE_FAST_MEM drawbuf_next_row(const void * buf, ui
     return (void *)((uint8_t *)buf + stride);
 }
 
-#if LV_DRAW_SW_SUPPORT_RGB565_SWAPPED
 static inline lv_color16_t LV_ATTRIBUTE_FAST_MEM lv_color16_from_u16(uint16_t raw)
 {
     lv_color16_t c;
@@ -1524,7 +1505,6 @@ static inline lv_color16_t LV_ATTRIBUTE_FAST_MEM lv_color16_from_u16(uint16_t ra
     c.blue = raw & 0x1F;
     return c;
 }
-#endif
 
 #endif /*LV_DRAW_SW_SUPPORT_RGB565*/
 

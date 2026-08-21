@@ -4,47 +4,52 @@
 
 This directory contains 10 first-party Arduino examples for the
 ESP32-P4-WIFI6-Touch-LCD-X 7-inch, 8-inch, and 10.1-inch variants. The
-display-facing sketches use the bundled `lcd_x` library. The shared
-[`libraries/`](libraries/) directory also bundles LVGL `9.5.0` and its
-`lv_conf.h` configuration. All sketches use Arduino-ESP32 APIs and require no
-unpublished component-registry dependency.
+display sketches use the LCD-5-style bundled libraries:
+`GFX_Library_for_Arduino`, `displays`, LVGL `9.3.0`, and `lv_conf.h`.
+All sketches use Arduino-ESP32 APIs and require no unpublished
+component-registry dependency.
 
 ## Examples
 
 | Sketch | Purpose |
 | --- | --- |
-| [`01_DisplayColorBars`](examples/01_DisplayColorBars/) | Initialize the selected MIPI-DSI panel and draw color bars. |
-| [`02_TouchDrawing`](examples/02_TouchDrawing/) | Poll GT9271 touch input and draw touch points. |
-| [`03_AsciiTable`](examples/03_AsciiTable/) | Render a printable ASCII character table using the display text API. |
-| [`04_LVGLV9`](examples/04_LVGLV9/) | Run an LVGL 9.5.0 display and polling-touch demonstration. |
-| [`05_WiFiAnalyzer`](examples/05_WiFiAnalyzer/) | Scan and display nearby Wi-Fi networks through the ESP32-C6 hosted connection. |
-| [`06_CameraPreview`](examples/06_CameraPreview/) | Show the onboard OV5647 MIPI-CSI camera preview on the selected LCD. |
-| [`07_CameraISPTuning`](examples/07_CameraISPTuning/) | Preview the camera and expose supported ISP tuning controls over Serial. |
-| [`08_SDCard`](examples/08_SDCard/) | Mount the MicroSD card and exercise basic file access. |
-| [`09_AudioPlayback`](examples/09_AudioPlayback/) | Play a synthesized melody through the ES8311 codec and speaker path, starting at volume 60. |
-| [`10_MicRecord`](examples/10_MicRecord/) | Capture the ES7210 stereo MIC1/MIC2 stream and report separate channel statistics over Serial. |
+| [`01_HelloWorld`](examples/01_HelloWorld/) | Minimal Arduino_GFX MIPI-DSI display bring-up. |
+| [`02_AsciiTable`](examples/02_AsciiTable/) | Arduino_GFX capability and benchmark table. |
+| [`03_Drawing_board`](examples/03_Drawing_board/) | GT9271 five-point capacitive-touch drawing. |
+| [`04_LVGLV9_Arduino`](examples/04_LVGLV9_Arduino/) | LVGL 9 widgets UI with touch input. |
+| [`05_GFX_ESPWiFiAnalyzer`](examples/05_GFX_ESPWiFiAnalyzer/) | Graphical Wi-Fi scan through the on-board ESP32-C6 coprocessor. |
+| [`06_Camera_Preview`](examples/06_Camera_Preview/) | OV5647 MIPI-CSI camera preview on the display. |
+| [`07_Camera_ISP_Tuning`](examples/07_Camera_ISP_Tuning/) | Live preview with interactive ISP/3A tuning over Serial. |
+| [`08_SD_Card`](examples/08_SD_Card/) | MicroSD read/write over the SDIO 3.0 slot. |
+| [`09_Audio_Playback`](examples/09_Audio_Playback/) | ES8311 codec plays the opening of “Für Elise” as different-frequency tones. |
+| [`10_Mic_Record`](examples/10_Mic_Record/) | ES7210 microphone capture; prints peak, RMS, and decimated samples over Serial. |
 
 Each sketch is built for all three display variants, for 30 compile rows in
 total. The 8-inch and 10.1-inch variants keep separate panel initialization
-tables even though they share the same controller family. Only `04_LVGLV9`
-uses the bundled LVGL `9.5.0` configuration.
+tables even though they share the same controller family. Only
+`04_LVGLV9_Arduino` uses the bundled LVGL `9.3.0` configuration.
 
 ## Build
 
 Install Arduino CLI and Arduino-ESP32 core `3.3.11`. Before compiling with the
-Arduino IDE, copy the **contents** of this repository's
-[`libraries/`](libraries/) directory into the sketchbook's `libraries`
-directory. The resulting layout must be:
+Arduino IDE, copy `GFX_Library_for_Arduino/`, `displays/`, `lvgl/`, and
+`lv_conf.h` from this repository's [`libraries/`](libraries/) directory into
+the sketchbook's `libraries/` directory. The resulting layout must be:
 
 ```text
-<sketchbook>/libraries/lcd_x/
+<sketchbook>/libraries/GFX_Library_for_Arduino/
+<sketchbook>/libraries/displays/
 <sketchbook>/libraries/lvgl/
 <sketchbook>/libraries/lv_conf.h
 ```
 
-Do not create an extra `libraries/libraries/` level. This provides `lcd_x`,
-LVGL `9.5.0`, and its configuration without a separate Library Manager
-install.
+Do not create an extra `libraries/libraries/` level.
+
+The bundled configuration defaults to LCD-10.1 (`101`). In Arduino IDE, select
+LCD-7, LCD-8, or LCD-10.1 by editing `LCD_X_DISPLAY_VARIANT` in
+`<sketchbook>/libraries/displays/displays_config.h` to `7`, `8`, or `101`
+before compiling. Define it there, rather than only inside one sketch, so the
+same value reaches every display and touch library source file.
 
 The Arduino-ESP32 core provides the standard `WiFi`, `ESP_Video`, `SD_MMC`,
 I2C, and I2S APIs used by the sketches. The ES8311 and ES7210 driver sources
@@ -57,22 +62,22 @@ arduino-cli compile \
   --fqbn 'esp32:esp32:esp32p4:ChipVariant=postv3,PSRAM=enabled,FlashSize=32M,FlashMode=qio,FlashFreq=80,PartitionScheme=app13M_data7M_32MB,UploadMode=default,UploadSpeed=921600' \
   --libraries examples/arduino/libraries \
   --build-property 'compiler.cpp.extra_flags=-DLCD_X_DISPLAY_VARIANT=7' \
-  examples/arduino/examples/01_DisplayColorBars
+  examples/arduino/examples/01_HelloWorld
 ```
 
 Set `LCD_X_DISPLAY_VARIANT` to `7`, `8`, or `101` for the LCD-7, LCD-8, or
 LCD-10.1 respectively. CI uses the same FQBN and bundled-library path for
-every sketch; only the display-facing sketches use `lcd_x`. The `postv3`
-selection is the maintained Rev3.x default; do not flash a build to a board
-with a different silicon-revision contract. The same command, with the target
-sketch path and variant value changed, also builds `04_LVGLV9`.
+every sketch. The `postv3` selection is the maintained Rev3.x default; do not
+flash a build to a board with a different silicon-revision contract. The same
+command, with the target sketch path and variant value changed, also builds
+`04_LVGLV9_Arduino`.
 
 ## Board peripherals used by the sketches
 
 | Peripheral | Board connection | Sketches |
 | --- | --- | --- |
 | Display | Two-lane MIPI-DSI; reset GPIO27 | `01`–`07` |
-| Touch | I2C SDA GPIO7 / SCL GPIO8; `INT` and `RST` are not assigned | `02`, `04` |
+| Touch | I2C SDA GPIO7 / SCL GPIO8; `INT` and `RST` are `GPIO_NUM_NC` | `03`, `04` |
 | Camera | OV5647 MIPI-CSI; SCCB SDA GPIO7 / SCL GPIO8 | `06`, `07` |
 | Hosted Wi-Fi | ESP32-C6 coprocessor over SDIO | `05` |
 | MicroSD | SDMMC 4-bit: CLK GPIO43, CMD GPIO44, D0 GPIO39, D1 GPIO40, D2 GPIO41, D3 GPIO42 | `08` |
@@ -81,13 +86,12 @@ sketch path and variant value changed, also builds `04_LVGLV9`.
 
 The I2C devices share the board bus. Camera, wireless, storage, and audio
 examples require their corresponding onboard peripheral; do not repurpose the
-listed pins while running those sketches. `05_WiFiAnalyzer` requires
+listed pins while running those sketches. `05_GFX_ESPWiFiAnalyzer` requires
 factory-compatible hosted firmware on the ESP32-C6 coprocessor; see
 [ESP32-C6 hosted Wi-Fi compatibility](../../docs/p4-c6-hosted-wifi.md).
-Start `09_AudioPlayback` at low speaker volume before adjusting it. The
-microphone example selects the two front microphones, MIC1 and MIC2, at 24 dB
-and reports both channels from the codec's stereo SDOUT1 stream. It does not
-enable the MIC3 echo-reference path or the unconnected MIC4 path.
+The audio sketches retain the LCD-5 codec and I2S example settings. Verify the
+speaker level and microphone/channel mapping on hardware before relying on
+audio output or captured data.
 
 ## Display and touch behavior
 

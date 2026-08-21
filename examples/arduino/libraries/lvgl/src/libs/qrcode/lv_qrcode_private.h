@@ -32,7 +32,6 @@ struct _lv_qrcode_t {
     lv_canvas_t canvas;
     lv_color_t dark_color;
     lv_color_t light_color;
-    int32_t quiet_zone;
 };
 
 

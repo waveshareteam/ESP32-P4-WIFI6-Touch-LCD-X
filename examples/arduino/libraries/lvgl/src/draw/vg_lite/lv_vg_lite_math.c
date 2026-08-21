@@ -1,5 +1,5 @@
 /**
- * @file lv_vg_lite_math.c
+ * @file lv_vg_lite_math.h
  *
  */
 

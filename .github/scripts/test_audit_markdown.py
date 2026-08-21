@@ -947,8 +947,7 @@ class MarkdownAuditTests(unittest.TestCase):
                 "firmware/brookesia/components/brookesia_core/**/*.md",
                 "firmware/brookesia/components/esp32_p4_wifi6_touch_lcd_x/README.md",
                 "firmware/brookesia/components/XiaozhiApp/third_party/xiaozhi_esp32/README.md",
-                "examples/arduino/libraries/lvgl/*.md",
-                "examples/arduino/libraries/lvgl/**/*.md",
+                "examples/arduino/libraries/**",
             ],
             raw["exclude_patterns"],
         )

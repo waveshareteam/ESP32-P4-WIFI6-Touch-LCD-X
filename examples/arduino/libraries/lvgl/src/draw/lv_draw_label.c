@@ -106,22 +106,8 @@ void LV_ATTRIBUTE_FAST_MEM lv_draw_label(lv_layer_t * layer, const lv_draw_label
         LV_LOG_WARN("dsc->font == NULL");
         return;
     }
-    if(coords->x1 > coords->x2) {
-        /* Attempting to draw a label too small (negative width), cancel to avoid error */
-        return;
-    }
+
     LV_PROFILER_DRAW_BEGIN;
-
-    if(dsc->base.drop_shadow_opa) {
-        lv_layer_t * ds_layer = lv_draw_layer_create_drop_shadow(layer, &dsc->base, coords);
-        LV_ASSERT_NULL(ds_layer);
-        lv_draw_label_dsc_t ds_dsc = *dsc;
-        ds_dsc.base.drop_shadow_opa = 0; /*Disable drop shadow so rendering below will render plain label*/
-        lv_draw_label(ds_layer, &ds_dsc, coords);
-        lv_draw_layer_finish_drop_shadow(ds_layer, &dsc->base);
-    }
-
-
     lv_draw_task_t * t = lv_draw_add_task(layer, coords, LV_DRAW_TASK_TYPE_LABEL);
 
     lv_memcpy(t->draw_dsc, dsc, sizeof(*dsc));
@@ -151,7 +137,6 @@ void LV_ATTRIBUTE_FAST_MEM lv_draw_character(lv_layer_t * layer, lv_draw_label_d
     LV_PROFILER_DRAW_BEGIN;
 
     lv_font_glyph_dsc_t g;
-
     lv_font_get_glyph_dsc(dsc->font, &g, unicode_letter, 0);
 
     lv_area_t a;
@@ -190,7 +175,6 @@ void LV_ATTRIBUTE_FAST_MEM lv_draw_letter(lv_layer_t * layer, lv_draw_letter_dsc
 
     LV_PROFILER_DRAW_BEGIN;
     lv_font_glyph_dsc_t g;
-
     lv_font_get_glyph_dsc(font, &g, dsc->unicode, 0);
 
     font = g.resolved_font ? g.resolved_font : dsc->font;
@@ -239,15 +223,9 @@ void lv_draw_label_iterate_characters(lv_draw_task_t * t, const lv_draw_label_ds
             w = dsc->text_size.x;
         }
         else {
-            lv_text_attributes_t attributes = {0};
-
-            attributes.letter_space = dsc->letter_space;
-            attributes.line_space = dsc->line_space;
-            attributes.max_width = LV_COORD_MAX;
-            attributes.text_flags = dsc->flag;
-
             lv_point_t p;
-            lv_text_get_size_attributes(&p, dsc->text, dsc->font, &attributes);
+            lv_text_get_size(&p, dsc->text, dsc->font, dsc->letter_space, dsc->line_space, LV_COORD_MAX,
+                             dsc->flag);
             w = p.x;
         }
     }
@@ -285,19 +263,15 @@ void lv_draw_label_iterate_characters(lv_draw_task_t * t, const lv_draw_label_ds
     }
 
     uint32_t remaining_len = dsc->text_length;
-    lv_text_attributes_t attributes = {0};
-    attributes.letter_space = dsc->letter_space;
-    attributes.text_flags = dsc->flag;
-    attributes.max_width = w;
 
-    uint32_t line_end = line_start + lv_text_get_next_line(&dsc->text[line_start], remaining_len, font, NULL, &attributes);
+    uint32_t line_end = line_start + lv_text_get_next_line(&dsc->text[line_start], remaining_len, font, dsc->letter_space,
+                                                           w, NULL, dsc->flag);
 
     /*Go the first visible line*/
     while(pos.y + line_height_font < t->clip_area.y1) {
         /*Go to next line*/
-        remaining_len -= line_end - line_start;
         line_start = line_end;
-        line_end += lv_text_get_next_line(&dsc->text[line_start], remaining_len, font, NULL, &attributes);
+        line_end += lv_text_get_next_line(&dsc->text[line_start], remaining_len, font, dsc->letter_space, w, NULL, dsc->flag);
         pos.y += line_height;
 
         /*Save at the threshold coordinate*/
@@ -312,13 +286,16 @@ void lv_draw_label_iterate_characters(lv_draw_task_t * t, const lv_draw_label_ds
 
     /*Align to middle*/
     if(align == LV_TEXT_ALIGN_CENTER) {
-        line_width = lv_text_get_width(&dsc->text[line_start], line_end - line_start, font, &attributes);
+        line_width = lv_text_get_width_with_flags(&dsc->text[line_start], line_end - line_start, font, dsc->letter_space,
+                                                  dsc->flag);
+
         pos.x += (lv_area_get_width(coords) - line_width) / 2;
 
     }
     /*Align to the right*/
     else if(align == LV_TEXT_ALIGN_RIGHT) {
-        line_width = lv_text_get_width(&dsc->text[line_start], line_end - line_start, font, &attributes);
+        line_width = lv_text_get_width_with_flags(&dsc->text[line_start], line_end - line_start, font, dsc->letter_space,
+                                                  dsc->flag);
         pos.x += lv_area_get_width(coords) - line_width;
     }
 
@@ -332,13 +309,11 @@ void lv_draw_label_iterate_characters(lv_draw_task_t * t, const lv_draw_label_ds
 
     lv_area_t bg_coords;
     lv_draw_glyph_dsc_t draw_letter_dsc;
-    lv_font_glyph_dsc_t glyph_dsc;
     lv_draw_glyph_dsc_init(&draw_letter_dsc);
     draw_letter_dsc.opa = dsc->opa;
     draw_letter_dsc.bg_coords = &bg_coords;
     draw_letter_dsc.color = dsc->color;
     draw_letter_dsc.rotation = dsc->rotation;
-    draw_letter_dsc.g = &glyph_dsc;
 
     /* Set letter outline stroke attributes */
     draw_letter_dsc.outline_stroke_width = dsc->outline_stroke_width;
@@ -353,7 +328,6 @@ void lv_draw_label_iterate_characters(lv_draw_task_t * t, const lv_draw_label_ds
     uint32_t next_char_offset;
     uint32_t recolor_command_start_index = 0;
     int32_t letter_w;
-
     cmd_state_t recolor_cmd_state = RECOLOR_CMD_STATE_WAIT_FOR_PARAMETER;
     lv_color_t recolor = lv_color_black(); /* Holds the selected color inside the recolor command */
     uint8_t is_first_space_after_cmd = 0;
@@ -364,6 +338,7 @@ void lv_draw_label_iterate_characters(lv_draw_task_t * t, const lv_draw_label_ds
         line_start_x = pos.x;
 
         /*Write all letter of a line*/
+        recolor_cmd_state = RECOLOR_CMD_STATE_WAIT_FOR_PARAMETER;
         next_char_offset = 0;
 #if LV_USE_BIDI
         size_t bidi_size = line_end - line_start;
@@ -480,13 +455,12 @@ void lv_draw_label_iterate_characters(lv_draw_task_t * t, const lv_draw_label_ds
                 logical_char_pos -= (LABEL_RECOLOR_PAR_LENGTH + 1);
             }
 
-            lv_font_get_glyph_dsc(font, &glyph_dsc, letter, letter_next);
-            letter_w = lv_text_is_marker(letter) ? 0 : glyph_dsc.adv_w;
+            letter_w = lv_font_get_glyph_width(font, letter, letter_next);
 
             /*Always set the bg_coordinates for placeholder drawing*/
-            bg_coords.x1 = pos.x - dsc->letter_space / 2;
+            bg_coords.x1 = pos.x;
             bg_coords.y1 = pos.y;
-            bg_coords.x2 = pos.x + letter_w - 1 + (dsc->letter_space + 1) / 2;
+            bg_coords.x2 = pos.x + letter_w - 1;
             bg_coords.y2 = pos.y + line_height - 1;
 
             if(next_char_offset >= line_end - line_start) {
@@ -537,31 +511,25 @@ void lv_draw_label_iterate_characters(lv_draw_task_t * t, const lv_draw_label_ds
         lv_free(bidi_txt);
         bidi_txt = NULL;
 #endif
-
-        lv_text_attributes_t text_attributes = {0};
-        text_attributes.letter_space = dsc->letter_space;
-        text_attributes.text_flags = dsc->flag;
-        text_attributes.max_width = w;
-
         /*Go to next line*/
         remaining_len -= line_end - line_start;
         line_start = line_end;
         if(remaining_len) {
-            line_end += lv_text_get_next_line(&dsc->text[line_start], remaining_len, font, NULL, &text_attributes);
+            line_end += lv_text_get_next_line(&dsc->text[line_start], remaining_len, font, dsc->letter_space, w, NULL, dsc->flag);
         }
 
         pos.x = coords->x1;
         /*Align to middle*/
         if(align == LV_TEXT_ALIGN_CENTER) {
             line_width =
-                lv_text_get_width(&dsc->text[line_start], line_end - line_start, font, &text_attributes);
+                lv_text_get_width_with_flags(&dsc->text[line_start], line_end - line_start, font, dsc->letter_space, dsc->flag);
 
             pos.x += (lv_area_get_width(coords) - line_width) / 2;
         }
         /*Align to the right*/
         else if(align == LV_TEXT_ALIGN_RIGHT) {
             line_width =
-                lv_text_get_width(&dsc->text[line_start], line_end - line_start, font, &text_attributes);
+                lv_text_get_width_with_flags(&dsc->text[line_start], line_end - line_start, font, dsc->letter_space, dsc->flag);
             pos.x += lv_area_get_width(coords) - line_width;
         }
 
@@ -601,23 +569,16 @@ void lv_draw_unit_draw_letter(lv_draw_task_t * t, lv_draw_glyph_dsc_t * dsc,  co
         return;
 
     LV_PROFILER_DRAW_BEGIN;
-    if(dsc->g == NULL) {
-        dsc->g = &g;
-        /*If the glyph dsc is not set then get it from the font*/
-        bool g_ret = lv_font_get_glyph_dsc(font, &g, letter, 0);
-        if(g_ret == false) {
-            /*Add warning if the dsc is not found*/
-            LV_LOG_WARN("lv_draw_letter: glyph dsc. not found for U+%" LV_PRIX32, letter);
-        }
-    }
-    else {
-        /*If the glyph dsc is set then use it*/
-        g = *dsc->g;
+    bool g_ret = lv_font_get_glyph_dsc(font, &g, letter, '\0');
+    if(g_ret == false) {
+        /*Add warning if the dsc is not found*/
+        LV_LOG_WARN("lv_draw_letter: glyph dsc. not found for U+%" LV_PRIX32, letter);
     }
 
     /*Don't draw anything if the character is empty. E.g. space*/
     if((g.box_h == 0) || (g.box_w == 0)) {
-        goto exit;
+        LV_PROFILER_DRAW_END;
+        return;
     }
 
     lv_area_t letter_coords;
@@ -631,7 +592,8 @@ void lv_draw_unit_draw_letter(lv_draw_task_t * t, lv_draw_glyph_dsc_t * dsc,  co
     if(lv_area_is_out(&letter_coords, &t->clip_area, 0) &&
        dsc->bg_coords &&
        lv_area_is_out(dsc->bg_coords, &t->clip_area, 0)) {
-        goto exit;
+        LV_PROFILER_DRAW_END;
+        return;
     }
 
     if(g.resolved_font) {
@@ -655,7 +617,8 @@ void lv_draw_unit_draw_letter(lv_draw_task_t * t, lv_draw_glyph_dsc_t * dsc,  co
         if(g.format == LV_FONT_GLYPH_FORMAT_VECTOR) {
 
             /*Load the outline of the glyph, even if the function says bitmap*/
-            dsc->glyph_data = (void *) lv_font_get_glyph_bitmap(dsc->g, draw_buf);
+            g.outline_stroke_width = dsc->outline_stroke_width;
+            dsc->glyph_data = (void *) lv_font_get_glyph_bitmap(&g, draw_buf);
             dsc->format = dsc->glyph_data ? g.format : LV_FONT_GLYPH_FORMAT_NONE;
         }
     }
@@ -664,14 +627,10 @@ void lv_draw_unit_draw_letter(lv_draw_task_t * t, lv_draw_glyph_dsc_t * dsc,  co
     }
 
     dsc->letter_coords = &letter_coords;
+    dsc->g = &g;
     cb(t, dsc, NULL, NULL);
 
-    lv_font_glyph_release_draw_data(dsc->g);
+    lv_font_glyph_release_draw_data(&g);
 
-exit:
-    if(dsc->g == &g) {
-        /* If the glyph was created locally, we don't need to keep it */
-        dsc->g = NULL;
-    }
     LV_PROFILER_DRAW_END;
 }

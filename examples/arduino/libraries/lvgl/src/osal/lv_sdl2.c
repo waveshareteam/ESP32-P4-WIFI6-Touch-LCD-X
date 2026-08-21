@@ -6,7 +6,7 @@
 /*********************
  *      INCLUDES
  *********************/
-#include "lv_os_private.h"
+#include "lv_os.h"
 
 #if LV_USE_OS == LV_OS_SDL2
 
@@ -179,11 +179,6 @@ uint32_t lv_os_get_idle_percent(void)
     return lv_timer_get_idle();
 }
 #endif
-
-void lv_sleep_ms(uint32_t ms)
-{
-    SDL_Delay(ms);
-}
 
 /**********************
  *   STATIC FUNCTIONS

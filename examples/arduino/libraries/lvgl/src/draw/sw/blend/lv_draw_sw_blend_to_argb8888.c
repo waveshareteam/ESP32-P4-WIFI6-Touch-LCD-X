@@ -1,5 +1,5 @@
 /**
- * @file lv_draw_sw_blend_to_argb8888.c
+ * @file lv_draw_sw_blend.c
  *
  */
 
@@ -91,9 +91,7 @@ static inline void /* LV_ATTRIBUTE_FAST_MEM */ blend_non_normal_pixel(lv_color32
 
 static inline void * /* LV_ATTRIBUTE_FAST_MEM */ drawbuf_next_row(const void * buf, uint32_t stride);
 
-#if LV_DRAW_SW_SUPPORT_RGB565_SWAPPED
-    static inline lv_color16_t /* LV_ATTRIBUTE_FAST_MEM */ lv_color16_from_u16(uint16_t raw);
-#endif
+static inline lv_color16_t /* LV_ATTRIBUTE_FAST_MEM */ lv_color16_from_u16(uint16_t raw);
 
 /**********************
  *  STATIC VARIABLES
@@ -609,7 +607,7 @@ static void LV_ATTRIBUTE_FAST_MEM l8_image_blend(lv_draw_sw_blend_image_dsc_t * 
             if(LV_RESULT_INVALID == LV_DRAW_SW_L8_BLEND_NORMAL_TO_ARGB8888(dsc)) {
                 for(y = 0; y < h; y++) {
                     for(dest_x = 0, src_x = 0; src_x < w; dest_x++, src_x++) {
-                        dest_buf_c32[dest_x].alpha = 0xff;
+                        dest_buf_c32[dest_x].alpha = src_buf_l8[src_x];
                         dest_buf_c32[dest_x].red = src_buf_l8[src_x];
                         dest_buf_c32[dest_x].green = src_buf_l8[src_x];
                         dest_buf_c32[dest_x].blue = src_buf_l8[src_x];
@@ -1352,7 +1350,6 @@ static inline void * LV_ATTRIBUTE_FAST_MEM drawbuf_next_row(const void * buf, ui
     return (void *)((uint8_t *)buf + stride);
 }
 
-#if LV_DRAW_SW_SUPPORT_RGB565_SWAPPED
 static inline lv_color16_t LV_ATTRIBUTE_FAST_MEM lv_color16_from_u16(uint16_t raw)
 {
     lv_color16_t c;
@@ -1361,7 +1358,6 @@ static inline lv_color16_t LV_ATTRIBUTE_FAST_MEM lv_color16_from_u16(uint16_t ra
     c.blue = raw & 0x1F;
     return c;
 }
-#endif
 
 #endif /* LV_DRAW_SW_SUPPORT_ARGB8888 */
 

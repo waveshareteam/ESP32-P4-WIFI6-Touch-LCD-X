@@ -99,9 +99,9 @@ GPIO 分配和电路细节请查阅仓库内原理图：
 
 [`examples/arduino/`](examples/arduino/) 提供 10 个第一方示例，涵盖显示、触摸、
 文本、LVGL 9、Hosted Wi-Fi 分析、摄像头预览与 ISP 调参、MicroSD、音频播放和
-麦克风采集。涉及显示的示例使用随仓库提供的 `lcd_x` 库；全部 10 个示例均会针对
-LCD-7、LCD-8 和 LCD-10.1 进行编译检查。只有 `04_LVGLV9` 使用随仓库提供的
-LVGL `9.5.0` 配置。完整的示例清单、外设引脚、
+麦克风采集。其随仓库提供的库结构与 LCD-5 一致：`GFX_Library_for_Arduino`、
+`displays`、LVGL `9.3.0` 和 `lv_conf.h`。全部 10 个示例均会针对 LCD-7、LCD-8
+和 LCD-10.1 进行编译检查。完整的示例清单、外设引脚、
 Arduino-ESP32 `3.3.11` FQBN 与型号构建方式请参阅
 [Arduino 示例说明](examples/arduino/README_ZH.md)。
 
@@ -129,7 +129,7 @@ Markdown 门禁，检查归属、中英文配对与同语言链接、首页对�
 [Arduino 示例工作流](https://github.com/waveshareteam/ESP32-P4-WIFI6-Touch-LCD-X/actions/workflows/arduino-examples.yml)
 使用 Arduino CLI `1.5.1` 和 Arduino-ESP32 `3.3.11` 为 10 个 Arduino 示例的全部
 三种显示型号编译（共 30 行）。它使用 `postv3` ESP32-P4 板级配置，仅编译，不发布
-固件或可下载构建产物。`05_WiFiAnalyzer` 在硬件上运行时需要 ESP32-C6 协处理器中
+固件或可下载构建产物。`05_GFX_ESPWiFiAnalyzer` 在硬件上运行时需要 ESP32-C6 协处理器中
 兼容的 Hosted 固件；请参阅 [Hosted Wi-Fi 兼容性说明](docs/p4-c6-hosted-wifi_ZH.md)。
 
 出厂二进制文件不会进入源码构建发现范围。本地板级胶水、嵌入式上游代码和
@@ -155,7 +155,7 @@ Markdown 门禁，检查归属、中英文配对与同语言链接、首页对�
 | 路径 | 用途 |
 | --- | --- |
 | [`examples/esp-idf/`](examples/esp-idf/) | 第一方 ESP-IDF 工程 |
-| [`examples/arduino/`](examples/arduino/) | 第一方 Arduino 示例与随仓库提供的板级库 |
+| [`examples/arduino/`](examples/arduino/) | 第一方 Arduino 示例与 LCD-5 一致的随仓库库 |
 | [`firmware/`](firmware/) | 出厂烧录固件与默认固件源码 |
 | [`docs/`](docs/) | 兼容性与维护说明 |
 | [`schematic/`](schematic/) | 开发板和转接板原理图 |

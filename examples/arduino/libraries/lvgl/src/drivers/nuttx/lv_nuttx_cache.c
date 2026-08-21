@@ -14,12 +14,7 @@
 
 #include "../../draw/lv_draw_buf_private.h"
 #include "../../core/lv_global.h"
-
-#ifdef __NuttX__
-    #include <nuttx/cache.h>
-#else
-    #include "mock/nuttx_cache.h"
-#endif
+#include <nuttx/cache.h>
 
 /*********************
  *      DEFINES

@@ -65,11 +65,12 @@ exact checkout SHA12. A successful compile is not hardware validation.
 The [Arduino examples workflow](https://github.com/waveshareteam/ESP32-P4-WIFI6-Touch-LCD-X/actions/workflows/arduino-examples.yml)
 is a separate 30-row compile matrix: 10 sketches for LCD-7, LCD-8, and
 LCD-10.1, using Arduino CLI `1.5.1` and Arduino-ESP32 `3.3.11` with the
-`postv3` Rev3.x board profile. Only `04_LVGLV9` uses the bundled LVGL `9.5.0`
-configuration. The workflow produces no Actions artifact, release image, or
-factory firmware. A successful compile is not a hardware test; `05_WiFiAnalyzer` also needs compatible
-ESP32-C6 hosted firmware when run on a board. See the [Arduino examples
-guide](../examples/arduino/README.md) for the sketch list, board options, and
-hardware-validation boundary. CI uses the same self-contained
-`examples/arduino/libraries` tree provided for Arduino IDE users; it does not
-download an Arduino library during the build.
+`postv3` Rev3.x board profile. It uses the LCD-5-style self-contained
+`GFX_Library_for_Arduino`, `displays`, LVGL `9.3.0`, and `lv_conf.h` tree;
+`04_LVGLV9_Arduino` uses LVGL. The workflow produces no Actions artifact,
+release image, or factory firmware. A successful compile is not a hardware
+test; `05_GFX_ESPWiFiAnalyzer` also needs compatible ESP32-C6 hosted firmware
+when run on a board. See the [Arduino examples guide](../examples/arduino/README.md)
+for the sketch list, board options, and hardware-validation boundary. CI uses
+the same self-contained `examples/arduino/libraries` tree provided for Arduino
+IDE users; it does not download an Arduino library during the build.

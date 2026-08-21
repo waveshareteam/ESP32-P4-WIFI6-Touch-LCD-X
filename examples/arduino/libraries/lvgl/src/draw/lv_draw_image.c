@@ -1,5 +1,5 @@
 /**
- * @file lv_draw_image.c
+ * @file lv_draw_img.c
  *
  */
 
@@ -76,7 +76,7 @@ void lv_draw_layer(lv_layer_t * layer, const lv_draw_image_dsc_t * dsc, const lv
     lv_draw_task_t * t = lv_draw_add_task(layer, coords, LV_DRAW_TASK_TYPE_LAYER);
     lv_draw_image_dsc_t * new_image_dsc = t->draw_dsc;
     lv_memcpy(new_image_dsc, dsc, sizeof(*dsc));
-    t->state = LV_DRAW_TASK_STATE_BLOCKED;
+    t->state = LV_DRAW_TASK_STATE_WAITING;
 
     lv_image_buf_get_transformed_area(&t->_real_area, lv_area_get_width(coords), lv_area_get_height(coords),
                                       dsc->rotation, dsc->scale_x, dsc->scale_y, &dsc->pivot);
@@ -109,15 +109,6 @@ void lv_draw_image(lv_layer_t * layer, const lv_draw_image_dsc_t * dsc, const lv
     }
 
     LV_PROFILER_DRAW_BEGIN;
-
-    if(dsc->base.drop_shadow_opa) {
-        lv_layer_t * ds_layer = lv_draw_layer_create_drop_shadow(layer, &dsc->base, image_coords);
-        LV_ASSERT_NULL(ds_layer);
-        lv_draw_image_dsc_t ds_dsc = *dsc;
-        ds_dsc.base.drop_shadow_opa = 0; /*Disable drop shadow so rendering below will render plain image*/
-        lv_draw_image(ds_layer, &ds_dsc, image_coords);
-        lv_draw_layer_finish_drop_shadow(ds_layer, &dsc->base);
-    }
 
     lv_draw_image_dsc_t new_image_dsc;
     lv_memcpy(&new_image_dsc, dsc, sizeof(*dsc));
@@ -189,8 +180,6 @@ void lv_draw_image(lv_layer_t * layer, const lv_draw_image_dsc_t * dsc, const lv
             }
 
         }
-
-        lv_image_decoder_close(&decoder_dsc);
     }
 
     LV_PROFILER_DRAW_END;
@@ -214,8 +203,7 @@ lv_image_src_t lv_image_src_get_type(const void * src)
 }
 
 void lv_draw_image_normal_helper(lv_draw_task_t * t, const lv_draw_image_dsc_t * draw_dsc,
-                                 const lv_area_t * coords, lv_draw_image_core_cb draw_core_cb,
-                                 const lv_image_decoder_args_t * decoder_args)
+                                 const lv_area_t * coords, lv_draw_image_core_cb draw_core_cb)
 {
     if(draw_core_cb == NULL) {
         LV_LOG_WARN("draw_core_cb is NULL");
@@ -243,7 +231,7 @@ void lv_draw_image_normal_helper(lv_draw_task_t * t, const lv_draw_image_dsc_t *
     }
 
     lv_image_decoder_dsc_t decoder_dsc;
-    lv_result_t res = lv_image_decoder_open(&decoder_dsc, draw_dsc->src, decoder_args);
+    lv_result_t res = lv_image_decoder_open(&decoder_dsc, draw_dsc->src, NULL);
     if(res != LV_RESULT_OK) {
         LV_LOG_ERROR("Failed to open image");
         return;
@@ -255,8 +243,7 @@ void lv_draw_image_normal_helper(lv_draw_task_t * t, const lv_draw_image_dsc_t *
 }
 
 void lv_draw_image_tiled_helper(lv_draw_task_t * t, const lv_draw_image_dsc_t * draw_dsc,
-                                const lv_area_t * coords, lv_draw_image_core_cb draw_core_cb,
-                                const lv_image_decoder_args_t * decoder_args)
+                                const lv_area_t * coords, lv_draw_image_core_cb draw_core_cb)
 {
     if(draw_core_cb == NULL) {
         LV_LOG_WARN("draw_core_cb is NULL");
@@ -264,7 +251,7 @@ void lv_draw_image_tiled_helper(lv_draw_task_t * t, const lv_draw_image_dsc_t * 
     }
 
     lv_image_decoder_dsc_t decoder_dsc;
-    lv_result_t res = lv_image_decoder_open(&decoder_dsc, draw_dsc->src, decoder_args);
+    lv_result_t res = lv_image_decoder_open(&decoder_dsc, draw_dsc->src, NULL);
     if(res != LV_RESULT_OK) {
         LV_LOG_ERROR("Failed to open image");
         return;

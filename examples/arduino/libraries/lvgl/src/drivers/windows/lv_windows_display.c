@@ -122,33 +122,23 @@ static unsigned int __stdcall lv_windows_display_thread_entrypoint(
     LV_ASSERT_NULL(data);
 
     DWORD window_style = WS_OVERLAPPEDWINDOW;
-    DWORD ext_window_style = WS_EX_CLIENTEDGE;
-    RECT rect = { 0, 0, data->hor_res, data->ver_res };
-
     if(data->simulator_mode) {
         window_style &= ~(WS_SIZEBOX | WS_MAXIMIZEBOX | WS_THICKFRAME);
     }
-    else {
-        /* Have Windows compute window size so, regardless of window style,
-         * the CLIENT AREA has dimensions [data->hor_res, data->ver_res].
-         * This is the area needed for LVGL to render to. */
-        AdjustWindowRectEx(&rect, window_style, false, ext_window_style);
-    }
 
     HWND window_handle = CreateWindowExW(
-                             ext_window_style,
+                             WS_EX_CLIENTEDGE,
                              L"LVGL.Window",
                              data->title,
                              window_style,
                              CW_USEDEFAULT,
                              0,
-                             rect.right - rect.left,
-                             rect.bottom - rect.top,
+                             data->hor_res,
+                             data->ver_res,
                              NULL,
                              NULL,
                              NULL,
                              data);
-
     if(!window_handle) {
         return 0;
     }

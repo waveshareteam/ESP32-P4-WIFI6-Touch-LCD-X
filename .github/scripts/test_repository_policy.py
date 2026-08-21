@@ -21,16 +21,16 @@ MANIFESTS = (
     'examples/esp-idf/12_usb_extend_screen/components/bsp_extra/idf_component.yml',
 )
 ARDUINO_SKETCHES = (
-    'examples/arduino/examples/01_DisplayColorBars/01_DisplayColorBars.ino',
-    'examples/arduino/examples/02_TouchDrawing/02_TouchDrawing.ino',
-    'examples/arduino/examples/03_AsciiTable/03_AsciiTable.ino',
-    'examples/arduino/examples/04_LVGLV9/04_LVGLV9.ino',
-    'examples/arduino/examples/05_WiFiAnalyzer/05_WiFiAnalyzer.ino',
-    'examples/arduino/examples/06_CameraPreview/06_CameraPreview.ino',
-    'examples/arduino/examples/07_CameraISPTuning/07_CameraISPTuning.ino',
-    'examples/arduino/examples/08_SDCard/08_SDCard.ino',
-    'examples/arduino/examples/09_AudioPlayback/09_AudioPlayback.ino',
-    'examples/arduino/examples/10_MicRecord/10_MicRecord.ino',
+    'examples/arduino/examples/01_HelloWorld/01_HelloWorld.ino',
+    'examples/arduino/examples/02_AsciiTable/02_AsciiTable.ino',
+    'examples/arduino/examples/03_Drawing_board/03_Drawing_board.ino',
+    'examples/arduino/examples/04_LVGLV9_Arduino/04_LVGLV9_Arduino.ino',
+    'examples/arduino/examples/05_GFX_ESPWiFiAnalyzer/05_GFX_ESPWiFiAnalyzer.ino',
+    'examples/arduino/examples/06_Camera_Preview/06_Camera_Preview.ino',
+    'examples/arduino/examples/07_Camera_ISP_Tuning/07_Camera_ISP_Tuning.ino',
+    'examples/arduino/examples/08_SD_Card/08_SD_Card.ino',
+    'examples/arduino/examples/09_Audio_Playback/09_Audio_Playback.ino',
+    'examples/arduino/examples/10_Mic_Record/10_Mic_Record.ino',
 )
 
 
@@ -94,15 +94,26 @@ class RepositoryPolicyTests(unittest.TestCase):
         self.assertEqual(tuple(sorted(ARDUINO_SKETCHES)), ARDUINO_SKETCHES)
         for relative in ARDUINO_SKETCHES:
             self.assertTrue((ROOT / relative).is_file())
-        touch = '\n'.join(
-            path.read_text(encoding='utf-8')
-            for path in sorted((ROOT / 'examples/arduino/libraries/lcd_x/src').glob('lcd_x_board.*'))
+        displays = ROOT / 'examples/arduino/libraries/displays'
+        self.assertTrue(displays.is_dir())
+        self.assertTrue((ROOT / 'examples/arduino/libraries/GFX_Library_for_Arduino').is_dir())
+        self.assertFalse((ROOT / 'examples/arduino/libraries/lcd_x').exists())
+        gt911_header = (displays / 'gt911.h').read_text(encoding='utf-8')
+        gt911_source = (displays / 'gt911.cpp').read_text(encoding='utf-8')
+        self.assertRegex(gt911_header, r'#define\s+EXAMPLE_PIN_NUM_TOUCH_RST\s+\(GPIO_NUM_NC\)')
+        self.assertRegex(gt911_header, r'#define\s+EXAMPLE_PIN_NUM_TOUCH_INT\s+\(GPIO_NUM_NC\)')
+        self.assertRegex(gt911_header, r'#define\s+ESP_LCD_TOUCH_IO_I2C_GT911_ADDRESS\s+\(0x5D\)')
+        self.assertRegex(gt911_header, r'#define\s+ESP_LCD_TOUCH_IO_I2C_GT911_ADDRESS_BACKUP\s+\(0x14\)')
+        self.assertRegex(
+            gt911_source,
+            r'(?s)i2c_master_probe\(port\.bus, ESP_LCD_TOUCH_IO_I2C_GT911_ADDRESS, 100\).*?'
+            r'i2c_master_probe\(port\.bus, ESP_LCD_TOUCH_IO_I2C_GT911_ADDRESS_BACKUP, 100\)',
         )
-        self.assertIn('GPIO_NUM_NC', touch)
-        self.assertIn('0x5D', touch)
-        self.assertIn('0x14', touch)
-        self.assertIn('config.device_address = address_', touch)
-        self.assertNotIn('gpio_isr_handler_add', touch)
+        self.assertIn('ESP_LCD_TOUCH_IO_I2C_GT911_CONFIG_WITH_ADDRESS(address)', gt911_source)
+        self.assertIn('.dev_addr = (_address)', gt911_header)
+        example_sources = '\n'.join((ROOT / relative).read_text(encoding='utf-8') for relative in ARDUINO_SKETCHES)
+        self.assertNotIn('gpio_isr_handler_add', example_sources)
+        self.assertNotIn('attachInterrupt(', example_sources)
         workflow = (ROOT / '.github/workflows/arduino-examples.yml').read_text(encoding='utf-8')
         self.assertIn('ARDUINO_CLI_VERSION: "1.5.1"', workflow)
         self.assertIn('ARDUINO_CORE_VERSION: "3.3.11"', workflow)
@@ -115,7 +126,7 @@ class RepositoryPolicyTests(unittest.TestCase):
 
         lvgl_properties = (ROOT / 'examples/arduino/libraries/lvgl/library.properties').read_text(encoding='utf-8')
         self.assertRegex(lvgl_properties, r'(?m)^name=lvgl$')
-        self.assertRegex(lvgl_properties, r'(?m)^version=9\.5\.0$')
+        self.assertRegex(lvgl_properties, r'(?m)^version=9\.3\.0$')
         lv_conf = (ROOT / 'examples/arduino/libraries/lv_conf.h').read_text(encoding='utf-8')
         self.assertRegex(lv_conf, r'(?m)^#if\s+1\b.*enable')
         self.assertNotIn('LV_CONF_SKIP', lv_conf)

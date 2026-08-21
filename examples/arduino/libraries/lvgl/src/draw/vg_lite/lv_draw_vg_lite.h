@@ -16,7 +16,7 @@ extern "C" {
 #include "../../lv_conf_internal.h"
 
 #if LV_USE_DRAW_VG_LITE
-
+#include "../lv_draw.h"
 #include "../../draw/lv_draw_vector.h"
 #include "../../draw/lv_draw_arc.h"
 #include "../../draw/lv_draw_rect.h"
@@ -79,7 +79,7 @@ void lv_draw_vg_lite_mask_rect(lv_draw_task_t * t, const lv_draw_mask_rect_dsc_t
                                const lv_area_t * coords);
 
 #if LV_USE_VECTOR_GRAPHIC
-void lv_draw_vg_lite_vector(lv_draw_task_t * t, const lv_draw_vector_dsc_t * dsc);
+void lv_draw_vg_lite_vector(lv_draw_task_t * t, const lv_draw_vector_task_dsc_t * dsc);
 #endif
 
 /**********************

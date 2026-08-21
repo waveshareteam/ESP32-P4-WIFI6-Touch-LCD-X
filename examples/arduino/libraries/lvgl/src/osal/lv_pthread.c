@@ -6,7 +6,7 @@
 /*********************
  *      INCLUDES
  *********************/
-#include "lv_os_private.h"
+#include "lv_os.h"
 
 #if LV_USE_OS == LV_OS_PTHREAD
 
@@ -178,11 +178,6 @@ uint32_t lv_os_get_idle_percent(void)
 }
 #endif
 
-void lv_sleep_ms(uint32_t ms)
-{
-    /* Just call standard posix sleep function */
-    usleep(ms * 1000);
-}
 
 /**********************
  *   STATIC FUNCTIONS
