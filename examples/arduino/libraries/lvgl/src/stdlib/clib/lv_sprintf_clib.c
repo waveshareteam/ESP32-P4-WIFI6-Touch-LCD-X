@@ -1,6 +1,6 @@
 
 /**
- * @file lv_sprintf_clib.c
+ * @file lv_templ.c
  *
  */
 

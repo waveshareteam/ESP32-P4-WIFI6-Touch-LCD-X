@@ -14,7 +14,6 @@ extern "C" {
  *      INCLUDES
  *********************/
 
-#include "lv_ext_data.h"
 #include "lv_event.h"
 
 /*********************
@@ -26,9 +25,6 @@ extern "C" {
  **********************/
 
 struct _lv_event_dsc_t {
-#if LV_USE_EXT_DATA
-    lv_ext_data_t ext_data;
-#endif
     lv_event_cb_t cb;
     void * user_data;
     uint32_t filter;
@@ -44,10 +40,6 @@ struct _lv_event_t {
     uint8_t deleted : 1;
     uint8_t stop_processing : 1;
     uint8_t stop_bubbling : 1;
-    uint8_t stop_trickling : 1;
-#if LV_USE_EXT_DATA
-    lv_ext_data_t ext_data;
-#endif
 };
 
 
@@ -62,10 +54,6 @@ struct _lv_event_t {
 void lv_event_push(lv_event_t * e);
 
 void lv_event_pop(lv_event_t * e);
-
-
-lv_result_t lv_event_push_and_send(lv_event_list_t * event_list, lv_event_code_t code, void * original_target,
-                                   void * param);
 
 /**
  * Nested events can be called and one of them might belong to an object that is being deleted.

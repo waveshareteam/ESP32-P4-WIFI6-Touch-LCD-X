@@ -1,5 +1,5 @@
 /**
- * @file lv_uefi_indev_pointer.c
+ * @file lv_uefi_indev.c
  *
  */
 
@@ -10,7 +10,7 @@
 #include "../../lvgl.h"
 #include "../../stdlib/lv_mem.h"
 #include "../../misc/lv_types.h"
-#include "../../misc/lv_text_private.h"
+#include "../../misc/lv_text.h"
 
 #if LV_USE_UEFI
 

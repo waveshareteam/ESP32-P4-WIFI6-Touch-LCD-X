@@ -15,7 +15,6 @@ extern "C" {
  *********************/
 #if LV_USE_OS == LV_OS_PTHREAD
 
-#include <unistd.h>
 #include <pthread.h>
 #include <semaphore.h>
 #include <stdbool.h>

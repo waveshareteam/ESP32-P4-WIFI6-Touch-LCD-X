@@ -10,9 +10,6 @@
 
 #if LV_USE_WAYLAND
 
-#include "../../lv_init.h"
-#include <errno.h>
-#include <stdlib.h>
 #include <string.h>
 #include "lv_wayland_private.h"
 #include "lv_wayland_private.h"
@@ -20,6 +17,8 @@
 #include "lv_wl_pointer_axis.h"
 #include "lv_wl_touch.h"
 #include "lv_wl_keyboard.h"
+
+#include "../../core/lv_refr.h"
 
 /*********************
  *      DEFINES
@@ -33,14 +32,41 @@
  *  STATIC PROTOTYPES
  **********************/
 
-static void refr_start_event(lv_event_t * e);
-static void refr_end_event(lv_event_t * e);
-static void res_changed_event(lv_event_t * e);
-static void delete_event(lv_event_t * e);
+static struct graphic_object * create_graphic_obj(struct window * window, enum object_type type,
+                                                  struct graphic_object * parent);
+static void destroy_graphic_obj(struct window * window, struct graphic_object * obj);
+
+/* Create a window
+ * @description Creates the graphical context for the window body, and then create a toplevel
+ * wayland surface and commit it to obtain an XDG configuration event
+ * @param width the height of the window w/decorations
+ * @param height the width of the window w/decorations
+ */
+static struct window * create_window(struct lv_wayland_context * app, int width, int height, const char * title);
+
+/**
+ * The frame callback called when the compositor has finished rendering
+ * a frame.It increments the frame counter and sets up the callback
+ * for the next frame the frame counter is used to avoid needlessly
+ * committing frames too fast on a slow system
+ *
+ * NOTE: this function is invoked by the wayland-server library within the compositor
+ * the event is added to the queue, and then upon the next timer call it's
+ * called indirectly from _lv_wayland_handle_input (via wl_display_dispatch_queue)
+ * @param void data the user object defined that was tied to this event during
+ * the configuration of the callback
+ * @param struct wl_callback The callback that needs to be destroyed and re-created
+ * @param time Timestamp of the event (unused)
+ */
+static void lv_window_graphic_obj_flush_done(void * data, struct wl_callback * cb, uint32_t time);
 
 /**********************
  *  STATIC VARIABLES
  **********************/
+
+static const struct wl_callback_listener wl_surface_frame_listener = {
+    .done = lv_window_graphic_obj_flush_done,
+};
 
 /**********************
  *      MACROS
@@ -51,56 +77,67 @@ static void delete_event(lv_event_t * e);
  **********************/
 
 lv_display_t * lv_wayland_window_create(uint32_t hor_res, uint32_t ver_res, char * title,
-                                        lv_wayland_display_close_cb_t close_cb)
+                                        lv_wayland_display_close_f_t close_cb)
 {
+    struct window * window;
+    int32_t window_width;
+    int32_t window_height;
+
     lv_wayland_init();
-    if(close_cb) {
-        LV_LOG_WARN("'lv_wayland_display_close_cb_t' is deprecated and will be removed in the next release. Instead bind an LV_EVENT_DELETE to the display\
-		      Bind an LV_EVENT_DELETE to the display returned by `lv_wayland_window_create` instead.");
-    }
 
-    lv_wl_window_t * window = lv_ll_ins_tail(&lv_wl_ctx.window_ll);
-    LV_ASSERT_MALLOC(window);
+    window_width  = hor_res;
+    window_height = ver_res;
+
+#if LV_WAYLAND_WINDOW_DECORATIONS
+    if(!lv_wl_ctx.opt_disable_decorations) {
+        window_width  = hor_res + (2 * BORDER_SIZE);
+        window_height = ver_res + (TITLE_BAR_HEIGHT + (2 * BORDER_SIZE));
+    }
+#endif
+
+    window = create_window(&lv_wl_ctx, window_width, window_height, title);
     if(!window) {
-        LV_LOG_ERROR("Failed to allocate memory fo window");
-        goto alloc_window_err;
+        LV_LOG_ERROR("failed to create wayland window");
+        return NULL;
     }
-
-    lv_memset(window, 0, sizeof(*window));
 
     window->close_cb = close_cb;
 
-    window->lv_disp = lv_display_create(hor_res, ver_res);
-    if(!window->lv_disp) {
-        LV_LOG_ERROR("failed to create lvgl display");
-        goto create_display_error;
-    }
-
-    window->body = wl_compositor_create_surface(lv_wl_ctx.wl_compositor);
-    if(!window->body) {
-        LV_LOG_ERROR("Failed to create window body");
-        goto create_surface_err;
-    }
-
-    if(lv_wl_xdg_create_window(lv_wl_ctx.xdg_wm, window, title) != LV_RESULT_OK) {
-        LV_LOG_ERROR("Failed to create window");
-        goto create_window_err;
-    }
-
-    lv_display_set_driver_data(window->lv_disp, window);
-
     /* Initialize display driver */
-    window->backend_display_data = wl_backend_ops.init_display(lv_wl_ctx.backend_data, window->lv_disp, hor_res, ver_res);
+    window->lv_disp = lv_display_create(hor_res, ver_res);
+    if(window->lv_disp == NULL) {
+        LV_LOG_ERROR("failed to create lvgl display");
+        return NULL;
+    }
 
-    lv_wayland_xdg_configure_surface(window);
+#if LV_WAYLAND_USE_DMABUF
+    if(lv_wayland_dmabuf_create_draw_buffers(&lv_wl_ctx.dmabuf_ctx, window) != LV_RESULT_OK) {
+        LV_LOG_ERROR("Failed to create draw buffers");
+        return NULL;
+    }
+#else
+    if(lv_wayland_shm_create_draw_buffers(&lv_wl_ctx.shm_ctx, window) != LV_RESULT_OK) {
+        LV_LOG_ERROR("Failed to create window buffers");
+        return NULL;
+    }
+#endif
 
-    lv_display_add_event_cb(window->lv_disp, res_changed_event, LV_EVENT_RESOLUTION_CHANGED, NULL);
-    lv_display_add_event_cb(window->lv_disp, refr_start_event, LV_EVENT_REFR_START, NULL);
-    lv_display_add_event_cb(window->lv_disp, refr_end_event, LV_EVENT_REFR_READY, NULL);
-    lv_display_add_event_cb(window->lv_disp, delete_event, LV_EVENT_DELETE, NULL);
+    lv_display_set_user_data(window->lv_disp, window);
+
+    lv_display_set_render_mode(window->lv_disp, LV_WAYLAND_RENDER_MODE);
+    lv_display_set_flush_wait_cb(window->lv_disp, lv_wayland_wait_flush_cb);
+
+#if LV_WAYLAND_USE_DMABUF
+    lv_wayland_dmabuf_set_draw_buffers(&lv_wl_ctx.dmabuf_ctx, window->lv_disp);
+    lv_display_set_flush_cb(window->lv_disp, lv_wayland_dmabuf_flush_full_mode);
+#else
+    lv_wayland_shm_set_draw_buffers(&lv_wl_ctx.shm_ctx, window->lv_disp);
+    lv_display_set_flush_cb(window->lv_disp, lv_wayland_shm_flush_partial_mode);
+#endif
 
     /* Register input */
     window->lv_indev_pointer = lv_wayland_pointer_create();
+
     lv_indev_set_display(window->lv_indev_pointer, window->lv_disp);
 
     if(!window->lv_indev_pointer) {
@@ -114,12 +151,16 @@ lv_display_t * lv_wayland_window_create(uint32_t hor_res, uint32_t ver_res, char
         LV_LOG_ERROR("failed to register pointeraxis indev");
     }
 
+#if LV_USE_GESTURE_RECOGNITION
+
     window->lv_indev_touch = lv_wayland_touch_create();
     lv_indev_set_display(window->lv_indev_touch, window->lv_disp);
 
     if(!window->lv_indev_touch) {
         LV_LOG_ERROR("failed to register touch indev");
     }
+
+#endif /* END LV_USE_GESTURE_RECOGNITION */
 
     window->lv_indev_keyboard = lv_wayland_keyboard_create();
     lv_indev_set_display(window->lv_indev_keyboard, window->lv_disp);
@@ -128,217 +169,321 @@ lv_display_t * lv_wayland_window_create(uint32_t hor_res, uint32_t ver_res, char
         LV_LOG_ERROR("failed to register keyboard indev");
     }
     return window->lv_disp;
-
-create_window_err:
-    wl_surface_destroy(window->body);
-create_surface_err:
-    lv_display_delete(window->lv_disp);
-create_display_error:
-    lv_ll_remove(&lv_wl_ctx.window_ll, window);
-    lv_free(window);
-alloc_window_err:
-    return NULL;
 }
 
-void * lv_wayland_get_backend_display_data(lv_display_t * display)
+void lv_wayland_window_close(lv_display_t * disp)
 {
-    LV_ASSERT_NULL(display);
-    lv_wl_window_t * window = lv_display_get_driver_data(display);
-    LV_ASSERT_NULL(window);
-    return window->backend_display_data;
-}
-
-void lv_wayland_set_backend_display_data(lv_display_t * display, void * data)
-{
-    LV_ASSERT_NULL(display);
-    lv_wl_window_t * window = lv_display_get_driver_data(display);
-    LV_ASSERT_NULL(window);
-    window->backend_display_data = data;
-}
-
-struct wl_surface * lv_wayland_get_window_surface(lv_display_t * display)
-{
-    LV_ASSERT_NULL(display);
-    lv_wl_window_t * window = lv_display_get_driver_data(display);
-    LV_ASSERT_NULL(window);
-    return window->body;
-}
-
-void lv_wayland_window_close(lv_display_t * display)
-{
-    LV_ASSERT_NULL(display);
-    lv_wl_window_t * window = lv_display_get_driver_data(display);
-    if(!window) {
+    struct window * window = lv_display_get_user_data(disp);
+    if(!window || window->closed) {
         return;
     }
-    window->close_cb = NULL;
-    lv_wayland_window_delete(window);
+    window->shall_close = true;
+    window->close_cb    = NULL;
     lv_wayland_deinit();
 }
 
 bool lv_wayland_window_is_open(lv_display_t * disp)
 {
-    LV_UNUSED(disp);
-    return true;
+    struct window * window;
+    bool open = false;
+
+    if(disp == NULL) {
+        LV_LL_READ(&lv_wl_ctx.window_ll, window) {
+            if(!window->closed) {
+                open = true;
+                break;
+            }
+        }
+    }
+    else {
+        window = lv_display_get_user_data(disp);
+        open   = (!window->closed);
+    }
+
+    return open;
 }
 
 void lv_wayland_window_set_maximized(lv_display_t * disp, bool maximized)
 {
-    lv_wl_window_t * window = lv_display_get_driver_data(disp);
-    if(!window) {
+    struct window * window = lv_display_get_user_data(disp);
+    lv_result_t err        = LV_RESULT_INVALID;
+    if(!window || window->closed) {
         return;
     }
+
     if(window->maximized != maximized) {
-        lv_wayland_xdg_set_maximized(&window->xdg, maximized);
+#if LV_WAYLAND_WL_SHELL
+        err = lv_wayland_wl_shell_set_maximized(window, maximized);
+#elif LV_WAYLAND_XDG_SHELL
+        err = lv_wayland_xdg_shell_set_maximized(window, maximized);
+#endif
     }
 
-    window->maximized = maximized;
-}
-void lv_wayland_window_set_minimized(lv_display_t * disp)
-{
-    lv_wl_window_t * window = lv_display_get_driver_data(disp);
-    if(!window) {
-        return;
-    }
-    lv_wayland_xdg_set_minimized(&window->xdg);
-}
-
-void lv_wayland_assign_physical_display(lv_display_t * disp, uint8_t display_number)
-{
-    if(!disp) {
-        LV_LOG_ERROR("Invalid display");
+    if(err == LV_RESULT_INVALID) {
+        LV_LOG_WARN("Failed to maximize wayland window");
         return;
     }
 
-    lv_wl_window_t * window = lv_display_get_driver_data(disp);
-
-    if(!window) {
-        LV_LOG_ERROR("Invalid window");
-        return;
-    }
-
-    if(display_number >= lv_wl_ctx.wl_output_count) {
-        LV_LOG_WARN("Invalid display number '%d'. Expected '0'..'%d'", display_number, lv_wl_ctx.wl_output_count - 1);
-        return;
-    }
-    window->physical_output = lv_wl_ctx.physical_outputs[display_number].wl_output;
-}
-
-void lv_wayland_unassign_physical_display(lv_display_t * disp)
-{
-
-    if(!disp) {
-        LV_LOG_ERROR("Invalid display");
-        return;
-    }
-
-    lv_wl_window_t * window = lv_display_get_user_data(disp);
-    if(!window) {
-        LV_LOG_ERROR("Invalid window");
-        return;
-    }
-    window->physical_output = NULL;
+    window->maximized     = maximized;
+    window->flush_pending = true;
 }
 
 void lv_wayland_window_set_fullscreen(lv_display_t * disp, bool fullscreen)
 {
-    lv_wl_window_t * window = lv_display_get_driver_data(disp);
-    if(!window) {
+    struct window * window = lv_display_get_user_data(disp);
+    lv_result_t err        = LV_RESULT_INVALID;
+    if(!window || window->closed) {
         return;
     }
 
     if(window->fullscreen == fullscreen) {
         return;
     }
-    lv_wayland_xdg_set_fullscreen(&window->xdg, fullscreen, window->physical_output);
-    window->fullscreen = fullscreen;
+#if LV_WAYLAND_WL_SHELL
+    err = lv_wayland_wl_shell_set_fullscreen(window, fullscreen);
+#elif LV_WAYLAND_XDG_SHELL
+    err = lv_wayland_xdg_shell_set_fullscreen(window, fullscreen);
+#endif
+
+    if(err == LV_RESULT_INVALID) {
+        LV_LOG_WARN("Failed to set wayland window to fullscreen");
+        return;
+    }
+
+    window->fullscreen    = fullscreen;
+    window->flush_pending = true;
 }
 
 /**********************
  *   PRIVATE FUNCTIONS
  **********************/
 
-int32_t lv_wayland_window_get_width(lv_wl_window_t * window)
+void lv_wayland_window_draw(struct window * window, uint32_t width, uint32_t height)
 {
-    return lv_display_get_horizontal_resolution(window->lv_disp);
-}
-int32_t lv_wayland_window_get_height(lv_wl_window_t * window)
-{
-    return lv_display_get_vertical_resolution(window->lv_disp);
+
+#if LV_WAYLAND_WINDOW_DECORATIONS
+    if(lv_wl_ctx.opt_disable_decorations == false) {
+        for(size_t i = 0; i < NUM_DECORATIONS; i++) {
+            window->decoration[i] = create_graphic_obj(window, (FIRST_DECORATION + i), window->body);
+            if(!window->decoration[i]) {
+                LV_LOG_ERROR("Failed to create decoration %zu", i);
+            }
+        }
+    }
+#endif
+
+    LV_LOG_TRACE("Resizing to %d %d", width, height);
+    /* First resize */
+    if(lv_wayland_window_resize(window, width, height) != LV_RESULT_OK) {
+        LV_LOG_ERROR("Failed to resize window");
+#if LV_WAYLAND_XDG_SHELL
+        lv_wayland_xdg_shell_destroy_window_toplevel(window);
+#endif
+    }
+
+    lv_refr_now(window->lv_disp);
 }
 
-void lv_wayland_window_delete(lv_wl_window_t * window)
+lv_result_t lv_wayland_window_resize(struct window * window, int width, int height)
+{
+
+
+#if LV_WAYLAND_WINDOW_DECORATIONS
+    if(!window->wl_ctx->opt_disable_decorations && !window->fullscreen) {
+        width -= (2 * BORDER_SIZE);
+        height -= (TITLE_BAR_HEIGHT + (2 * BORDER_SIZE));
+    }
+#endif
+
+#if LV_WAYLAND_USE_DMABUF
+    {
+        lv_result_t err = lv_wayland_dmabuf_resize_window(&window->wl_ctx->dmabuf_ctx, window);
+        if(err != LV_RESULT_OK) {
+            return err;
+        }
+    }
+#else
+    {
+        lv_result_t err = lv_wayland_shm_resize_window(&window->wl_ctx->shm_ctx, window, width, height);
+        if(err != LV_RESULT_OK) {
+            return err;
+        }
+    }
+#endif
+
+#if LV_WAYLAND_WINDOW_DECORATIONS
+    if(!window->wl_ctx->opt_disable_decorations && !window->fullscreen) {
+        lv_wayland_window_decoration_create_all(window);
+    }
+    else if(!window->wl_ctx->opt_disable_decorations) {
+        /* Entering fullscreen, detach decorations to prevent xdg_wm_base error 4 */
+        /* requested geometry larger than the configured fullscreen state */
+        lv_wayland_window_decoration_detach_all(window);
+    }
+#endif
+
+    if(window->lv_disp) {
+        lv_display_set_resolution(window->lv_disp, width, height);
+        window->body->input.pointer.x = LV_MIN((int32_t)window->body->input.pointer.x, (width - 1));
+        window->body->input.pointer.y = LV_MIN((int32_t)window->body->input.pointer.y, (height - 1));
+    }
+    window->width  = width;
+    window->height = height;
+    return LV_RESULT_OK;
+}
+
+void lv_wayland_window_destroy(struct window * window)
 {
     if(!window) {
         return;
     }
 
-    if(window->close_cb) {
-        window->close_cb(window->lv_disp);
+#if LV_WAYLAND_WL_SHELL
+    lv_wayland_wl_shell_destroy_window(window);
+#elif LV_WAYLAND_XDG_SHELL
+    lv_wayland_xdg_shell_destroy_window_toplevel(window);
+    lv_wayland_xdg_shell_destroy_window_surface(window);
+#endif
+
+#if LV_WAYLAND_WINDOW_DECORATIONS
+    for(size_t i = 0; i < NUM_DECORATIONS; i++) {
+        if(window->decoration[i]) {
+            destroy_graphic_obj(window, window->decoration[i]);
+            window->decoration[i] = NULL;
+        }
     }
-    lv_wayland_xdg_delete_window(&window->xdg);
+#endif
 
-    /* Commit a NULL buffer to the body surface so that we release buffers*/
-    wl_surface_attach(window->body, NULL, 0, 0);
-    wl_surface_commit(window->body);
-    wl_display_roundtrip(lv_wl_ctx.wl_display);
+    destroy_graphic_obj(window, window->body);
+}
 
-    wl_surface_destroy(window->body);
-    window->body = NULL;
-
-    /* Make sure buffer is correctly released*/
-    wl_display_roundtrip(lv_wl_ctx.wl_display);
-
-    wl_backend_ops.deinit_display(window->backend_display_data, window->lv_disp);
-    window->backend_display_data = NULL;
-
-    /* Set the driver data to NULL before calling display delete
-     * so that the delete event doesn't do anything*/
-    lv_display_set_driver_data(window->lv_disp, NULL);
-    lv_display_delete(window->lv_disp);
-
-
-    lv_ll_remove(&lv_wl_ctx.window_ll, window);
-
-    if(LV_WAYLAND_DIRECT_EXIT && lv_ll_is_empty(&lv_wl_ctx.window_ll)) {
-        /* lv_deinit will deinit the wayland driver*/
-        lv_deinit();
-        exit(0);
-    }
+const struct wl_callback_listener * lv_wayland_window_get_wl_surface_frame_listener(void)
+{
+    return &wl_surface_frame_listener;
 }
 
 /**********************
  *   STATIC FUNCTIONS
  **********************/
 
-static void delete_event(lv_event_t * e)
+static struct window * create_window(struct lv_wayland_context * app, int width, int height, const char * title)
 {
-    lv_display_t * display = lv_event_get_target(e);
-    lv_wl_window_t * window = lv_display_get_driver_data(display);
-    lv_wayland_window_delete(window);
-}
+    struct window * window;
 
-static void refr_start_event(lv_event_t * e)
-{
-    lv_display_t * display = lv_event_get_target(e);
-    lv_wl_window_t * window = lv_display_get_driver_data(display);
-
-    if(lv_wayland_xdg_is_resize_pending(window)) {
-        lv_wayland_xdg_resize(window);
+    window = lv_ll_ins_tail(&app->window_ll);
+    LV_ASSERT_MALLOC(window);
+    if(!window) {
+        return NULL;
     }
+
+    lv_memset(window, 0x00, sizeof(struct window));
+
+    window->wl_ctx = app;
+
+    // Create wayland buffer and surface
+    window->body   = create_graphic_obj(window, OBJECT_WINDOW, NULL);
+    window->width  = width;
+    window->height = height;
+
+    if(!window->body) {
+        LV_LOG_ERROR("cannot create window body");
+        goto err_free_window;
+    }
+
+#if LV_WAYLAND_WL_SHELL
+    if(lv_wayland_wl_shell_create_window(app, window, title) != LV_RESULT_OK) {
+        LV_LOG_ERROR("Failed to create wl shell window");
+        goto err_destroy_surface;
+    }
+#elif LV_WAYLAND_XDG_SHELL
+    if(lv_wayland_xdg_shell_create_window(app, window, title) != LV_RESULT_OK) {
+        goto err_destroy_surface;
+    }
+#endif
+
+    return window;
+
+err_destroy_surface:
+    wl_surface_destroy(window->body->surface);
+
+err_free_window:
+    lv_ll_remove(&app->window_ll, window);
+    lv_free(window);
+    return NULL;
 }
 
-static void refr_end_event(lv_event_t * e)
+static struct graphic_object * create_graphic_obj(struct window * window, enum object_type type,
+                                                  struct graphic_object * parent)
 {
-    LV_UNUSED(e);
-    lv_wayland_flush();
+
+    /* For now creating a graphical object is similar enough for both shm and dmabuf
+     * so the heavylifting is done in this function directly but we still
+     * call the shm and dmabuf specific functions at the end to make sure they can add additional
+     * attributes if needed
+     */
+    struct graphic_object * obj = NULL;
+
+    LV_UNUSED(parent);
+
+    obj = lv_malloc(sizeof(*obj));
+    LV_ASSERT_MALLOC(obj);
+    if(!obj) {
+        LV_LOG_ERROR("Failed to create graphic object");
+        return NULL;
+    }
+
+    lv_memset(obj, 0, sizeof(*obj));
+
+    obj->surface = wl_compositor_create_surface(window->wl_ctx->compositor);
+    if(!obj->surface) {
+        LV_LOG_ERROR("Failed to create surface for graphic object");
+        lv_free(obj);
+        return NULL;
+    }
+    wl_surface_set_user_data(obj->surface, obj);
+
+    obj->window = window;
+    obj->type   = type;
+
+#if LV_WAYLAND_USE_DMABUF
+    return lv_wayland_dmabuf_on_graphical_object_creation(&window->wl_ctx->dmabuf_ctx, obj);
+#else
+    return lv_wayland_shm_on_graphical_object_creation(&window->wl_ctx->shm_ctx, obj);
+#endif
 }
 
-static void res_changed_event(lv_event_t * e)
+static void destroy_graphic_obj(struct window * window, struct graphic_object * obj)
 {
-    lv_display_t * display = (lv_display_t *) lv_event_get_target(e);
-    lv_wl_window_t * window = lv_display_get_driver_data(display);
-    window->backend_display_data = wl_backend_ops.resize_display(lv_wl_ctx.backend_data, display);
+    if(obj->subsurface) {
+        wl_subsurface_destroy(obj->subsurface);
+    }
+
+    wl_surface_destroy(obj->surface);
+
+#if LV_WAYLAND_USE_DMABUF
+    lv_wayland_dmabuf_on_graphical_object_destruction(&window->wl_ctx->dmabuf_ctx, obj);
+#else
+    lv_wayland_shm_on_graphical_object_destruction(&window->wl_ctx->shm_ctx, obj);
+#endif
+    lv_free(obj);
+}
+
+static void lv_window_graphic_obj_flush_done(void * data, struct wl_callback * cb, uint32_t time)
+{
+    struct graphic_object * obj;
+    struct window * window;
+
+    LV_UNUSED(time);
+
+    wl_callback_destroy(cb);
+
+    obj    = (struct graphic_object *)data;
+    window = obj->window;
+    window->frame_counter++;
+
+    LV_LOG_TRACE("frame: %d done, new frame: %d", window->frame_counter - 1, window->frame_counter);
+
+    lv_display_flush_ready(window->lv_disp);
 }
 
 #endif /* LV_USE_WAYLAND */

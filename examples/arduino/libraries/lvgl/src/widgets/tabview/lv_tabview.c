@@ -32,32 +32,9 @@ static void lv_tabview_event(const lv_obj_class_t * class_p, lv_event_t * e);
 static void button_clicked_event_cb(lv_event_t * e);
 static void cont_scroll_end_event_cb(lv_event_t * e);
 
-#if LV_USE_OBJ_PROPERTY
-static void lv_tabview_set_tab_active_property(lv_obj_t * obj, uint32_t idx)
-{
-    lv_tabview_set_active(obj, idx, LV_ANIM_OFF);
-}
-#endif
-
 /**********************
  *  STATIC VARIABLES
  **********************/
-
-#if LV_USE_OBJ_PROPERTY
-static const lv_property_ops_t lv_tabview_properties[] = {
-    {
-        .id = LV_PROPERTY_TABVIEW_TAB_ACTIVE,
-        .setter = lv_tabview_set_tab_active_property,
-        .getter = lv_tabview_get_tab_active,
-    },
-    {
-        .id = LV_PROPERTY_TABVIEW_TAB_BAR_POSITION,
-        .setter = lv_tabview_set_tab_bar_position,
-        .getter = lv_tabview_get_tab_bar_position,
-    },
-};
-#endif
-
 const lv_obj_class_t lv_tabview_class = {
     .constructor_cb = lv_tabview_constructor,
     .event_cb = lv_tabview_event,
@@ -66,7 +43,6 @@ const lv_obj_class_t lv_tabview_class = {
     .base_class = &lv_obj_class,
     .instance_size = sizeof(lv_tabview_t),
     .name = "lv_tabview",
-    LV_PROPERTY_CLASS_FIELDS(tabview, TABVIEW)
 };
 
 typedef struct {
@@ -121,7 +97,7 @@ lv_obj_t * lv_tabview_add_tab(lv_obj_t * obj, const char * name)
     return page;
 }
 
-void lv_tabview_set_tab_text(lv_obj_t * obj, uint32_t idx, const char * new_name)
+void lv_tabview_rename_tab(lv_obj_t * obj, uint32_t idx, const char * new_name)
 {
     LV_ASSERT_OBJ(obj, MY_CLASS);
 
@@ -130,22 +106,6 @@ void lv_tabview_set_tab_text(lv_obj_t * obj, uint32_t idx, const char * new_name
     lv_obj_t * label = lv_obj_get_child_by_type(button, 0, &lv_label_class);
     lv_label_set_text(label, new_name);
 }
-
-#if LV_USE_TRANSLATION
-
-lv_obj_t * lv_tabview_set_tab_translation_tag(lv_obj_t * obj, const char * tag)
-{
-    LV_ASSERT_OBJ(obj, MY_CLASS);
-
-    lv_obj_t * page = lv_tabview_add_tab(obj, NULL);
-    lv_obj_t * button = lv_tabview_get_tab_button(obj, -1);
-    lv_obj_t * label = lv_obj_get_child_by_type(button, 0, &lv_label_class);
-    lv_label_set_translation_tag(label, tag);
-
-    return page;
-}
-
-#endif
 
 void lv_tabview_set_active(lv_obj_t * obj, uint32_t idx, lv_anim_enable_t anim_en)
 {
@@ -259,8 +219,6 @@ void lv_tabview_set_tab_bar_position(lv_obj_t * obj, lv_dir_t dir)
         }
     }
     tabview->tab_pos = dir;
-    /* Update the tab bar size after the position is changed*/
-    lv_tabview_set_tab_bar_size(obj, tabview->tab_bar_size);
 }
 
 void lv_tabview_set_tab_bar_size(lv_obj_t * obj, int32_t size)
@@ -275,7 +233,6 @@ void lv_tabview_set_tab_bar_size(lv_obj_t * obj, int32_t size)
     else {
         lv_obj_set_width(tab_bar, size);
     }
-    tabview->tab_bar_size = size;
 }
 
 uint32_t lv_tabview_get_tab_active(lv_obj_t * obj)
@@ -283,13 +240,6 @@ uint32_t lv_tabview_get_tab_active(lv_obj_t * obj)
     LV_ASSERT_OBJ(obj, MY_CLASS);
     lv_tabview_t * tabview = (lv_tabview_t *)obj;
     return tabview->tab_cur;
-}
-
-lv_obj_t * lv_tabview_get_tab_button(lv_obj_t * obj, int32_t idx)
-{
-    LV_ASSERT_OBJ(obj, MY_CLASS);
-
-    return lv_obj_get_child_by_type(lv_tabview_get_tab_bar(obj), idx, &lv_button_class);
 }
 
 uint32_t lv_tabview_get_tab_count(lv_obj_t * obj)
@@ -307,13 +257,6 @@ lv_obj_t * lv_tabview_get_content(lv_obj_t * tv)
 lv_obj_t * lv_tabview_get_tab_bar(lv_obj_t * tv)
 {
     return lv_obj_get_child(tv, 0);
-}
-
-lv_dir_t lv_tabview_get_tab_bar_position(lv_obj_t * obj)
-{
-    LV_ASSERT_OBJ(obj, MY_CLASS);
-    lv_tabview_t * tabview = (lv_tabview_t *)obj;
-    return tabview->tab_pos;
 }
 
 /**********************
@@ -337,16 +280,7 @@ static void lv_tabview_constructor(const lv_obj_class_t * class_p, lv_obj_t * ob
     lv_obj_add_event_cb(cont, cont_scroll_end_event_cb, LV_EVENT_LAYOUT_CHANGED, NULL);
     lv_obj_add_event_cb(cont, cont_scroll_end_event_cb, LV_EVENT_SCROLL_END, NULL);
     lv_obj_set_scrollbar_mode(cont, LV_SCROLLBAR_MODE_OFF);
-
-    const lv_dir_t default_direction = LV_DIR_TOP;
-    const int32_t dpi = lv_display_get_dpi(lv_obj_get_display(obj));
-    if(default_direction & LV_DIR_VER) {
-        tabview->tab_bar_size = dpi / 2;
-    }
-    else {
-        tabview->tab_bar_size = dpi;
-    }
-    lv_tabview_set_tab_bar_position(obj, default_direction);
+    lv_tabview_set_tab_bar_position(obj, LV_DIR_TOP);
 
     lv_obj_add_flag(cont, LV_OBJ_FLAG_SCROLL_ONE);
     lv_obj_remove_flag(cont, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
@@ -371,23 +305,8 @@ static void button_clicked_event_cb(lv_event_t * e)
     lv_obj_t * button = lv_event_get_current_target(e);
 
     lv_obj_t * tv = lv_obj_get_parent(lv_obj_get_parent(button));
-
-    if(tv == NULL) return;
-
-    /* Remember currently active tab before the click */
-    uint32_t prev_idx = lv_tabview_get_tab_active(tv);
-
-    /* Index of the button that was clicked */
-    uint32_t idx = lv_obj_get_index_by_type(button, &lv_button_class);
-
-    /* Switch to the requested tab */
+    int32_t idx = lv_obj_get_index_by_type(button, &lv_button_class);
     lv_tabview_set_active(tv, idx, LV_ANIM_OFF);
-
-    /* If the tab really changed, notify listeners just like the
-     * swipe/scroll handler does. */
-    if(prev_idx != idx) {
-        lv_obj_send_event(tv, LV_EVENT_VALUE_CHANGED, NULL);
-    }
 }
 
 static void cont_scroll_end_event_cb(lv_event_t * e)

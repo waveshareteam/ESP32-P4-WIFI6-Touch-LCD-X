@@ -24,7 +24,6 @@ extern "C" {
 #include "../misc/lv_text.h"
 #include "../misc/lv_profiler.h"
 #include "../misc/lv_matrix.h"
-#include "../misc/lv_event.h"
 #include "lv_image_decoder.h"
 #include "lv_draw_buf.h"
 
@@ -58,7 +57,6 @@ typedef enum {
     LV_DRAW_TASK_TYPE_TRIANGLE,
     LV_DRAW_TASK_TYPE_MASK_RECTANGLE,
     LV_DRAW_TASK_TYPE_MASK_BITMAP,
-    LV_DRAW_TASK_TYPE_BLUR,
 #if LV_USE_VECTOR_GRAPHIC
     LV_DRAW_TASK_TYPE_VECTOR,
 #endif
@@ -68,52 +66,22 @@ typedef enum {
 } lv_draw_task_type_t;
 
 typedef enum {
-    /** Waiting for an other task to be finished.
-     * For example in case of `LV_DRAW_TASK_TYPE_LAYER` (used to blend a layer)
-     * is blocked until all the draw tasks of the layer is rendered. */
-    LV_DRAW_TASK_STATE_BLOCKED,
-
-    /** The draw task is added to the layers list and waits to be rendered. */
-    LV_DRAW_TASK_STATE_WAITING,
-
-    /** The draw task is added to the command queue of the draw unit.
-     * As the queued task are executed in order it's possible to queue multiple draw task
-     * (for the same draw unit) even if they are depending on each other.
-     * Therefore `lv_draw_get_available_task` and `lv_draw_get_next_available_task` can return
-     * draw task for the same draw unit even if a dependent draw task is not finished ready yet.*/
+    LV_DRAW_TASK_STATE_WAITING,     /*Waiting for something to be finished. E.g. rendering a layer*/
     LV_DRAW_TASK_STATE_QUEUED,
-
-    /** The draw task is being rendered. This draw task needs to be finished before
-     * `lv_draw_get_available_task` and `lv_draw_get_next_available_task` would
-     * return any depending draw tasks.*/
     LV_DRAW_TASK_STATE_IN_PROGRESS,
-
-    /** The draw task is rendered. It will be removed from the draw task list of the layer
-     * and freed automatically. */
-    LV_DRAW_TASK_STATE_FINISHED,
+    LV_DRAW_TASK_STATE_READY,
 } lv_draw_task_state_t;
 
 struct _lv_layer_t  {
-    /** Target draw buffer of the layer */
+
+    /** Target draw buffer of the layer*/
     lv_draw_buf_t * draw_buf;
-
-    /** Linked list of draw tasks */
-    lv_draw_task_t * draw_task_head;
-
-    /** Parent layer */
-    lv_layer_t * parent;
-
-    /** Next layer */
-    lv_layer_t * next;
-
-    /** User data */
-    void * user_data;
 
     /** The absolute coordinates of the buffer */
     lv_area_t buf_area;
 
-    /** The physical clipping area relative to the display */
-    lv_area_t phy_clip_area;
+    /** The color format of the layer. LV_COLOR_FORMAT_...  */
+    lv_color_format_t color_format;
 
     /**
      * NEVER USE IT DRAW UNITS. USED INTERNALLY DURING DRAW TASK CREATION.
@@ -125,25 +93,32 @@ struct _lv_layer_t  {
      */
     lv_area_t _clip_area;
 
+    /**
+     * The physical clipping area relative to the display.
+     */
+    lv_area_t phy_clip_area;
+
 #if LV_DRAW_TRANSFORM_USE_MATRIX
     /** Transform matrix to be applied when rendering the layer */
     lv_matrix_t matrix;
 #endif
 
+    /** Opacity of the layer */
+    lv_opa_t opa;
+
+    /*Recolor of the layer*/
+    lv_color32_t recolor;
+
     /** Partial y offset */
     int32_t partial_y_offset;
 
-    /** Recolor of the layer */
-    lv_color32_t recolor;
+    /** Linked list of draw tasks */
+    lv_draw_task_t * draw_task_head;
 
-    /** The color format of the layer. LV_COLOR_FORMAT_... */
-    lv_color_format_t color_format;
-
-    /** Flag indicating all tasks are added */
+    lv_layer_t * parent;
+    lv_layer_t * next;
     bool all_tasks_added;
-
-    /** Opacity of the layer */
-    lv_opa_t opa;
+    void * user_data;
 };
 
 typedef struct {
@@ -151,7 +126,7 @@ typedef struct {
     lv_obj_t * obj;
 
     /**The widget part for which draw descriptor was created */
-    uint32_t part;
+    lv_part_t part;
 
     /**A widget type specific ID (e.g. table row index). See the docs of the given widget.*/
     uint32_t id1;
@@ -161,26 +136,6 @@ typedef struct {
 
     /**The target layer */
     lv_layer_t * layer;
-
-    /*Drop shadow is part of every draw dsc as anything can have drop shadow*/
-
-    /**Drop shadow offset in X*/
-    int16_t drop_shadow_ofs_x;
-
-    /**Drop shadow offset in Y*/
-    int16_t drop_shadow_ofs_y;
-
-    /**Drop shadow color*/
-    lv_color_t drop_shadow_color;
-
-    /**Drop shadow opacity*/
-    lv_opa_t drop_shadow_opa;
-
-    /**Drop shadow blur radius*/
-    int32_t drop_shadow_blur_radius: 20;
-
-    /**Drop shadow blur quality*/
-    lv_blur_quality_t drop_shadow_quality : 3;
 
     /**Size of the specific draw descriptor into which this base descriptor is embedded*/
     size_t dsc_size;
@@ -293,15 +248,6 @@ lv_draw_task_t * lv_draw_get_next_available_task(lv_layer_t * layer, lv_draw_tas
  */
 uint32_t lv_draw_get_dependent_count(lv_draw_task_t * t_check);
 
-
-/**
- * Send an event to the draw units
- * @param name              the name of the draw unit to send the event to
- * @param code              the event code
- * @param param             the event parameter
- */
-void lv_draw_unit_send_event(const char * name, lv_event_code_t code, void * param);
-
 /**
  * Initialize a layer
  * @param layer pointer to a layer to initialize
@@ -370,14 +316,6 @@ void * lv_draw_task_get_draw_dsc(const lv_draw_task_t * t);
  * @param area   the destination where the draw area will be stored
 */
 void lv_draw_task_get_area(const lv_draw_task_t * t, lv_area_t * area);
-
-
-
-lv_layer_t * lv_draw_layer_create_drop_shadow(lv_layer_t * parent_layer, const lv_draw_dsc_base_t * base,
-                                              const lv_area_t * area);
-
-void lv_draw_layer_finish_drop_shadow(lv_layer_t * drop_shadow_layer, const lv_draw_dsc_base_t * base);
-
 
 /**********************
  *  GLOBAL VARIABLES

@@ -58,4 +58,4 @@ int lv_wayland_get_fd(void);
 } /* extern "C" */
 #endif
 
-#endif /* LV_WAYLAND_H */
+#endif /* WAYLAND_H */

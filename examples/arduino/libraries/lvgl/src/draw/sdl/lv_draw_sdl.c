@@ -163,7 +163,7 @@ static int32_t dispatch(lv_draw_unit_t * draw_unit, lv_layer_t * layer)
 
     execute_drawing(draw_sdl_unit);
 
-    draw_sdl_unit->task_act->state = LV_DRAW_TASK_STATE_FINISHED;
+    draw_sdl_unit->task_act->state = LV_DRAW_TASK_STATE_READY;
     draw_sdl_unit->task_act = NULL;
 
     /*The draw unit is free now. Request a new dispatching as it can get a new task*/
@@ -471,13 +471,6 @@ static void draw_from_cached_texture(lv_draw_sdl_unit_t * u)
         lv_draw_label_dsc_t * label_dsc = t->draw_dsc;
         if(!label_dsc->text_static) {
             lv_cache_drop(u->texture_cache, &data_to_find, NULL);
-        }
-    }
-    /*Do not cache lines rendered from points at dsc->points will be freed*/
-    else if(t->type == LV_DRAW_TASK_TYPE_LINE) {
-        lv_draw_line_dsc_t * line_dsc = t->draw_dsc;
-        if(line_dsc->points) {
-            lv_cache_drop(u->texture_cache, &data_to_find, u);
         }
     }
 }

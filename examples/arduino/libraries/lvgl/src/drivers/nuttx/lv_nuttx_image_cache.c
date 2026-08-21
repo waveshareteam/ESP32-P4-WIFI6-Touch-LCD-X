@@ -14,13 +14,7 @@
 #if LV_USE_NUTTX
 
 #include "../../draw/lv_draw_buf_private.h"
-#include <stdlib.h>
-
-#ifdef __NuttX__
-    #include <nuttx/mm/mm.h>
-#else
-    #include "mock/nuttx_mm.h"
-#endif
+#include <nuttx/mm/mm.h>
 
 /*********************
  *      DEFINES
@@ -48,12 +42,12 @@ typedef struct {
     bool initialized;
     bool independent_image_heap;
 
-    lv_draw_buf_malloc_cb_t malloc_cb;
-    lv_draw_buf_free_cb_t free_cb;
+    lv_draw_buf_malloc_cb malloc_cb;
+    lv_draw_buf_free_cb free_cb;
 
 #if LV_NUTTX_DEFAULT_DRAW_BUF_USE_INDEPENDENT_IMAGE_HEAP
-    lv_draw_buf_malloc_cb_t malloc_cb_default;
-    lv_draw_buf_free_cb_t free_cb_default;
+    lv_draw_buf_malloc_cb malloc_cb_default;
+    lv_draw_buf_free_cb free_cb_default;
 #endif
 } lv_nuttx_ctx_image_cache_t;
 /**********************
@@ -163,7 +157,7 @@ static bool defer_init(void)
     ctx->heap_size = info.arena;
 
     LV_LOG_USER("heap info:");
-    LV_LOG_USER("  heap: %p", (void *)ctx->heap);
+    LV_LOG_USER("  heap: %p", ctx->heap);
     LV_LOG_USER("  mem: %p", ctx->mem);
     LV_LOG_USER("  mem_size: %" LV_PRIu32, ctx->mem_size);
     LV_LOG_USER("  arena: %d", info.arena);

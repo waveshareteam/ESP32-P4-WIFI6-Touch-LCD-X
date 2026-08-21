@@ -105,10 +105,10 @@ the example-specific notes before flashing.
 
 [`examples/arduino/`](examples/arduino/) provides 10 first-party sketches for
 display, touch, text, LVGL 9, hosted Wi-Fi analysis, camera preview and ISP
-tuning, MicroSD, audio playback, and microphone capture. The
-display-facing sketches use the bundled `lcd_x` library; all 10 sketches are
-compile-checked for LCD-7, LCD-8, and LCD-10.1. Only `04_LVGLV9` uses the
-bundled LVGL `9.5.0` configuration. See the [Arduino examples
+tuning, MicroSD, audio playback, and microphone capture. They follow the
+LCD-5 bundled-library layout: `GFX_Library_for_Arduino`, `displays`, LVGL
+`9.3.0`, and `lv_conf.h`. All 10 sketches are compile-checked for LCD-7,
+LCD-8, and LCD-10.1. See the [Arduino examples
 guide](examples/arduino/README.md) for the complete sketch list, peripheral
 assignments, exact Arduino-ESP32 `3.3.11` FQBN, and variant build command.
 
@@ -145,7 +145,7 @@ workflow](https://github.com/waveshareteam/ESP32-P4-WIFI6-Touch-LCD-X/actions/wo
 compiles the 10 Arduino sketches with Arduino CLI `1.5.1` and Arduino-ESP32
 `3.3.11` for all three display variants (30 rows). It uses the `postv3`
 ESP32-P4 board profile, is compile-only, and does not publish firmware or
-downloadable build artifacts. `05_WiFiAnalyzer` requires compatible hosted
+downloadable build artifacts. `05_GFX_ESPWiFiAnalyzer` requires compatible hosted
 firmware on the ESP32-C6 coprocessor when run on hardware; see [hosted Wi-Fi
 compatibility](docs/p4-c6-hosted-wifi.md).
 
@@ -177,7 +177,7 @@ for the flash download tool and related materials.
 | Path | Purpose |
 | --- | --- |
 | [`examples/esp-idf/`](examples/esp-idf/) | First-party ESP-IDF projects |
-| [`examples/arduino/`](examples/arduino/) | First-party Arduino sketches and bundled board library |
+| [`examples/arduino/`](examples/arduino/) | First-party Arduino sketches and bundled LCD-5-style libraries |
 | [`firmware/`](firmware/) | Factory flashing binaries and default firmware source |
 | [`docs/`](docs/) | Compatibility and maintainer notes |
 | [`schematic/`](schematic/) | Board and adapter schematics |

@@ -57,7 +57,7 @@ class MarkdownLinkTests(unittest.TestCase):
             stdout=(
                 b"README.md\0docs/Guide with space.md\0"
                 b"examples/esp-idf/demo/components/upstream/README.md\0"
-                b"examples/arduino/libraries/lvgl/README.md\0"
+                b"examples/arduino/libraries/GFX_Library_for_Arduino/README.md\0"
                 b"docs/libraries-guide.md\0"
             ),
         )

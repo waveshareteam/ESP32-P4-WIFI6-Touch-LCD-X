@@ -15,8 +15,6 @@
 #include "../misc/lv_color.h"
 #include "../stdlib/lv_string.h"
 #include "../core/lv_global.h"
-#include "lv_observer_private.h"
-
 /*********************
  *      DEFINES
  *********************/
@@ -38,16 +36,13 @@ typedef struct {
     lv_style_value_t end_value;
 } trans_t;
 
-typedef struct {
-    const lv_style_t * style;
-    lv_style_selector_t selector;
-    int32_t value;
-} bind_style_t;
-
-typedef struct {
-    lv_style_prop_t prop;
-    lv_style_selector_t selector;
-} bind_style_prop_t;
+typedef enum {
+    CACHE_ZERO = 0,
+    CACHE_TRUE = 1,
+    CACHE_UNSET = 2,
+    CACHE_255 = 3,
+    CACHE_NEED_CHECK = 4,
+} cache_t;
 
 /**********************
  *  GLOBAL PROTOTYPES
@@ -57,7 +52,7 @@ typedef struct {
  *  STATIC PROTOTYPES
  **********************/
 static lv_style_t * get_local_style(lv_obj_t * obj, lv_style_selector_t selector);
-static lv_obj_style_t * get_trans_style(lv_obj_t * obj, lv_style_selector_t selector);
+static lv_obj_style_t * get_trans_style(lv_obj_t * obj, lv_part_t part);
 static lv_style_res_t get_prop_core(const lv_obj_t * obj, lv_style_selector_t selector, lv_style_prop_t prop,
                                     lv_style_value_t * v);
 static void report_style_change_core(void * style, lv_obj_t * obj);
@@ -73,11 +68,6 @@ static void fade_in_anim_completed(lv_anim_t * a);
 static bool style_has_flag(const lv_style_t * style, uint32_t flag);
 static lv_style_res_t get_selector_style_prop(const lv_obj_t * obj, lv_style_selector_t selector, lv_style_prop_t prop,
                                               lv_style_value_t * value_act);
-static void remove_style_core(lv_obj_t * obj, const lv_style_t * style, lv_style_selector_t selector, bool theme_only);
-#if LV_USE_OBSERVER
-    static void bind_style_observer_cb(lv_observer_t * observer, lv_subject_t * subject);
-    static void bind_style_prop_observer_cb(lv_observer_t * observer, lv_subject_t * subject);
-#endif
 
 /**********************
  *  STATIC VARIABLES
@@ -212,12 +202,55 @@ bool lv_obj_replace_style(lv_obj_t * obj, const lv_style_t * old_style, const lv
 
 void lv_obj_remove_style(lv_obj_t * obj, const lv_style_t * style, lv_style_selector_t selector)
 {
-    remove_style_core(obj, style, selector, false);
-}
+    lv_state_t state = lv_obj_style_get_selector_state(selector);
+    lv_part_t part = lv_obj_style_get_selector_part(selector);
+    lv_style_prop_t prop = LV_STYLE_PROP_ANY;
+    if(style && style->prop_cnt == 0) prop = LV_STYLE_PROP_INV;
 
-void lv_obj_remove_theme(lv_obj_t * obj, lv_style_selector_t selector)
-{
-    remove_style_core(obj, NULL, selector, true);
+    if(style && part == LV_PART_MAIN && style_has_flag(style, LV_STYLE_PROP_FLAG_TRANSFORM)) {
+        lv_obj_invalidate(obj);
+    }
+
+    uint32_t i = 0;
+    bool deleted = false;
+    while(i <  obj->style_cnt) {
+        lv_state_t state_act = lv_obj_style_get_selector_state(obj->styles[i].selector);
+        lv_part_t part_act = lv_obj_style_get_selector_part(obj->styles[i].selector);
+        if((state != LV_STATE_ANY && state_act != state) ||
+           (part != LV_PART_ANY && part_act != part) ||
+           (style != NULL && style != obj->styles[i].style)) {
+            i++;
+            continue;
+        }
+
+        if(obj->styles[i].is_trans) {
+            trans_delete(obj, part, LV_STYLE_PROP_ANY, NULL);
+        }
+
+        if(obj->styles[i].is_local || obj->styles[i].is_trans) {
+            if(obj->styles[i].style) lv_style_reset((lv_style_t *)obj->styles[i].style);
+            lv_free((lv_style_t *)obj->styles[i].style);
+            obj->styles[i].style = NULL;
+        }
+
+        /*Shift the styles after `i` by one*/
+        uint32_t j;
+        for(j = i; j < (uint32_t)obj->style_cnt - 1 ; j++) {
+            obj->styles[j] = obj->styles[j + 1];
+        }
+
+        obj->style_cnt--;
+        obj->styles = lv_realloc(obj->styles, obj->style_cnt * sizeof(lv_obj_style_t));
+
+        deleted = true;
+        /*The style from the current `i` index is removed, so `i` points to the next style.
+         *Therefore it doesn't needs to be incremented*/
+    }
+
+    if(deleted && prop != LV_STYLE_PROP_INV) {
+        full_cache_refresh(obj, part);
+        lv_obj_refresh_style(obj, part, prop);
+    }
 }
 
 void lv_obj_remove_style_all(lv_obj_t * obj)
@@ -239,7 +272,7 @@ void lv_obj_report_style_change(lv_style_t * style)
     }
 }
 
-void lv_obj_refresh_style(lv_obj_t * obj, lv_part_t part, lv_style_prop_t prop)
+void lv_obj_refresh_style(lv_obj_t * obj, lv_style_selector_t selector, lv_style_prop_t prop)
 {
     LV_ASSERT_OBJ(obj, MY_CLASS);
 
@@ -249,6 +282,8 @@ void lv_obj_refresh_style(lv_obj_t * obj, lv_part_t part, lv_style_prop_t prop)
 
     lv_obj_invalidate(obj);
 
+    lv_part_t part = lv_obj_style_get_selector_part(selector);
+
     bool is_layout_refr = lv_style_prop_has_flag(prop, LV_STYLE_PROP_FLAG_LAYOUT_UPDATE);
     bool is_ext_draw = lv_style_prop_has_flag(prop, LV_STYLE_PROP_FLAG_EXT_DRAW_UPDATE);
     bool is_inheritable = lv_style_prop_has_flag(prop, LV_STYLE_PROP_FLAG_INHERITABLE);
@@ -257,8 +292,8 @@ void lv_obj_refresh_style(lv_obj_t * obj, lv_part_t part, lv_style_prop_t prop)
     if(is_layout_refr) {
         if(part == LV_PART_ANY ||
            part == LV_PART_MAIN ||
-           lv_obj_get_style_height(obj, LV_PART_MAIN) == LV_SIZE_CONTENT ||
-           lv_obj_get_style_width(obj, LV_PART_MAIN) == LV_SIZE_CONTENT) {
+           lv_obj_get_style_height(obj, 0) == LV_SIZE_CONTENT ||
+           lv_obj_get_style_width(obj, 0) == LV_SIZE_CONTENT) {
             lv_obj_send_event(obj, LV_EVENT_STYLE_CHANGED, NULL);
             lv_obj_mark_layout_as_dirty(obj);
         }
@@ -286,37 +321,6 @@ void lv_obj_refresh_style(lv_obj_t * obj, lv_part_t part, lv_style_prop_t prop)
 
     LV_PROFILER_STYLE_END;
 }
-
-void lv_obj_style_set_disabled(lv_obj_t * obj, const lv_style_t * style, lv_style_selector_t selector, bool dis)
-{
-    uint32_t i;
-    for(i = 0; i < obj->style_cnt; i++) {
-        if(obj->styles[i].style == style && obj->styles[i].selector == selector) {
-            if(dis == obj->styles[i].is_disabled) {
-                return; /*Already in the right state*/
-            }
-            obj->styles[i].is_disabled = dis;
-            full_cache_refresh(obj, lv_obj_style_get_selector_part(selector));
-            lv_obj_refresh_style(obj, selector, LV_STYLE_PROP_ANY);
-            return;
-        }
-    }
-    LV_LOG_WARN("%p style was not found on %p widget with %6" LV_PRIx32 " selector", (void *)style, (void *)obj, selector);
-}
-
-bool lv_obj_style_get_disabled(lv_obj_t * obj, const lv_style_t * style, lv_style_selector_t selector)
-{
-    uint32_t i;
-    for(i = 0; i < obj->style_cnt; i++) {
-        if(obj->styles[i].style == style && obj->styles[i].selector == selector) {
-            return obj->styles[i].is_disabled;
-        }
-    }
-
-    LV_LOG_WARN("%p style was not found on %p widget with %6" LV_PRIx32 " selector", (void *)style, (void *)obj, selector);
-    return false;
-}
-
 
 void lv_obj_enable_style_refresh(bool en)
 {
@@ -569,7 +573,7 @@ void lv_obj_fade_out(lv_obj_t * obj, uint32_t time, uint32_t delay)
     lv_anim_t a;
     lv_anim_init(&a);
     lv_anim_set_var(&a, obj);
-    lv_anim_set_values(&a, lv_obj_get_style_opa(obj, LV_PART_MAIN), LV_OPA_TRANSP);
+    lv_anim_set_values(&a, lv_obj_get_style_opa(obj, 0), LV_OPA_TRANSP);
     lv_anim_set_exec_cb(&a, fade_anim_cb);
     lv_anim_set_duration(&a, time);
     lv_anim_set_delay(&a, delay);
@@ -677,68 +681,6 @@ lv_color32_t lv_obj_get_style_recolor_recursive(const lv_obj_t * obj, lv_part_t 
     return result;
 }
 
-#if LV_USE_OBSERVER
-
-lv_observer_t * lv_obj_bind_style(lv_obj_t * obj, const lv_style_t * style, lv_style_selector_t selector,
-                                  lv_subject_t * subject, int32_t ref_value)
-{
-    LV_ASSERT_NULL(subject);
-    LV_ASSERT_NULL(obj);
-
-    if(subject->type != LV_SUBJECT_TYPE_INT) {
-        LV_LOG_WARN("Subject type must be `int` (was %d)", subject->type);
-        return NULL;
-    }
-
-    lv_obj_add_style(obj, style, selector);
-
-    bind_style_t * p = lv_malloc(sizeof(bind_style_t));
-    LV_ASSERT_MALLOC(p);
-    if(p == NULL) {
-        LV_LOG_WARN("Out of memory");
-        return NULL;
-    }
-
-    p->style = style;
-    p->selector = selector;
-    p->value = ref_value;
-
-    lv_observer_t * observable = lv_subject_add_observer_obj(subject, bind_style_observer_cb, obj, p);
-    observable->auto_free_user_data = 1;
-    return observable;
-}
-
-lv_observer_t * lv_obj_bind_style_prop(lv_obj_t * obj, lv_style_prop_t prop, lv_style_selector_t selector,
-                                       lv_subject_t * subject)
-{
-    LV_ASSERT_NULL(subject);
-    LV_ASSERT_NULL(obj);
-
-    if(subject->type != LV_SUBJECT_TYPE_INT && subject->type != LV_SUBJECT_TYPE_COLOR &&
-       subject->type != LV_SUBJECT_TYPE_POINTER) {
-        LV_LOG_WARN("Subject type must be `int`, `color`, or `pointer` (was %"LV_PRIu32")", (uint32_t) subject->type);
-        return NULL;
-    }
-
-    bind_style_prop_t * p = lv_malloc(sizeof(bind_style_prop_t));
-    LV_ASSERT_MALLOC(p);
-    if(p == NULL) {
-        LV_LOG_WARN("Out of memory");
-        return NULL;
-    }
-
-    p->prop = prop;
-    p->selector = selector;
-
-    lv_observer_t * observable = lv_subject_add_observer_obj(subject, bind_style_prop_observer_cb, obj, p);
-    observable->auto_free_user_data = 1;
-    return observable;
-}
-
-
-#endif /*LV_USE_OBSERVER*/
-
-
 /**********************
  *   STATIC FUNCTIONS
  **********************/
@@ -831,7 +773,6 @@ static lv_style_res_t get_prop_core(const lv_obj_t * obj, lv_style_selector_t se
         lv_obj_style_t * obj_style = &obj->styles[i];
         if(obj_style->is_trans == false) break;
         if(skip_trans) continue;
-        if(obj_style->is_disabled) continue;
 
         lv_part_t part_act = lv_obj_style_get_selector_part(obj->styles[i].selector);
 
@@ -845,7 +786,6 @@ static lv_style_res_t get_prop_core(const lv_obj_t * obj, lv_style_selector_t se
 
     for(; i < obj->style_cnt; i++) {
         if((obj->styles[i].style->has_group & group) == 0) continue;
-        if(obj->styles[i].is_disabled) continue;
         lv_obj_style_t * obj_style = &obj->styles[i];
         lv_part_t part_act = lv_obj_style_get_selector_part(obj->styles[i].selector);
         if(part_act != part) continue;
@@ -856,7 +796,7 @@ static lv_style_res_t get_prop_core(const lv_obj_t * obj, lv_style_selector_t se
         if((state_act & state_inv)) continue;
 
         /*Check only better candidates*/
-        if((int32_t)state_act <= weight) continue;
+        if(state_act <= weight) continue;
 
         found = lv_style_get_prop_inlined(obj_style->style, prop, v);
         if(found == LV_STYLE_RES_FOUND) {
@@ -1086,14 +1026,14 @@ static lv_layer_type_t calculate_layer_type(lv_obj_t * obj)
 #if LV_DRAW_TRANSFORM_USE_MATRIX
     if(lv_obj_get_transform(obj) != NULL) return LV_LAYER_TYPE_TRANSFORM;
 #endif
-    if(lv_obj_get_style_transform_rotation(obj, LV_PART_MAIN) != 0) return LV_LAYER_TYPE_TRANSFORM;
-    if(lv_obj_get_style_transform_scale_x(obj, LV_PART_MAIN) != 256) return LV_LAYER_TYPE_TRANSFORM;
-    if(lv_obj_get_style_transform_scale_y(obj, LV_PART_MAIN) != 256) return LV_LAYER_TYPE_TRANSFORM;
-    if(lv_obj_get_style_transform_skew_x(obj, LV_PART_MAIN) != 0) return LV_LAYER_TYPE_TRANSFORM;
-    if(lv_obj_get_style_transform_skew_y(obj, LV_PART_MAIN) != 0) return LV_LAYER_TYPE_TRANSFORM;
-    if(lv_obj_get_style_opa_layered(obj, LV_PART_MAIN) != LV_OPA_COVER) return LV_LAYER_TYPE_SIMPLE;
-    if(lv_obj_get_style_bitmap_mask_src(obj, LV_PART_MAIN) != NULL) return LV_LAYER_TYPE_SIMPLE;
-    if(lv_obj_get_style_blend_mode(obj, LV_PART_MAIN) != LV_BLEND_MODE_NORMAL) return LV_LAYER_TYPE_SIMPLE;
+    if(lv_obj_get_style_transform_rotation(obj, 0) != 0) return LV_LAYER_TYPE_TRANSFORM;
+    if(lv_obj_get_style_transform_scale_x(obj, 0) != 256) return LV_LAYER_TYPE_TRANSFORM;
+    if(lv_obj_get_style_transform_scale_y(obj, 0) != 256) return LV_LAYER_TYPE_TRANSFORM;
+    if(lv_obj_get_style_transform_skew_x(obj, 0) != 0) return LV_LAYER_TYPE_TRANSFORM;
+    if(lv_obj_get_style_transform_skew_y(obj, 0) != 0) return LV_LAYER_TYPE_TRANSFORM;
+    if(lv_obj_get_style_opa_layered(obj, 0) != LV_OPA_COVER) return LV_LAYER_TYPE_SIMPLE;
+    if(lv_obj_get_style_bitmap_mask_src(obj, 0) != NULL) return LV_LAYER_TYPE_SIMPLE;
+    if(lv_obj_get_style_blend_mode(obj, 0) != LV_BLEND_MODE_NORMAL) return LV_LAYER_TYPE_SIMPLE;
     return LV_LAYER_TYPE_NONE;
 }
 
@@ -1105,7 +1045,6 @@ static void full_cache_refresh(lv_obj_t * obj, lv_part_t part)
         obj->style_main_prop_is_set = 0;
         for(i = 0; i < obj->style_cnt; i++) {
             if(lv_obj_style_get_selector_part(obj->styles[i].selector) != LV_PART_MAIN) continue;
-            if(obj->styles[i].is_disabled) continue;
             lv_style_t * style = (lv_style_t *)obj->styles[i].style;
             uint32_t j;
             if(lv_style_is_const(style)) {
@@ -1126,8 +1065,6 @@ static void full_cache_refresh(lv_obj_t * obj, lv_part_t part)
         obj->style_other_prop_is_set = 0;
         for(i = 0; i < obj->style_cnt; i++) {
             if(lv_obj_style_get_selector_part(obj->styles[i].selector) == LV_PART_MAIN) continue;
-            if(obj->styles[i].is_disabled) continue;
-
             lv_style_t * style = (lv_style_t *)obj->styles[i].style;
             uint32_t j;
             if(lv_style_is_const(style)) {
@@ -1254,92 +1191,3 @@ static lv_style_res_t get_selector_style_prop(const lv_obj_t * obj, lv_style_sel
 
     return LV_STYLE_RES_NOT_FOUND;
 }
-
-static void remove_style_core(lv_obj_t * obj, const lv_style_t * style, lv_style_selector_t selector, bool theme_only)
-{
-    lv_state_t state = lv_obj_style_get_selector_state(selector);
-    lv_part_t part = lv_obj_style_get_selector_part(selector);
-    lv_style_prop_t prop = LV_STYLE_PROP_ANY;
-    if(style && style->prop_cnt == 0) prop = LV_STYLE_PROP_INV;
-
-    if(style && part == LV_PART_MAIN && style_has_flag(style, LV_STYLE_PROP_FLAG_TRANSFORM)) {
-        lv_obj_invalidate(obj);
-    }
-
-    uint32_t i = 0;
-    bool deleted = false;
-    while(i <  obj->style_cnt) {
-        lv_state_t state_act = lv_obj_style_get_selector_state(obj->styles[i].selector);
-        lv_part_t part_act = lv_obj_style_get_selector_part(obj->styles[i].selector);
-        if(theme_only && !obj->styles[i].is_theme) {
-            i++;
-            continue;
-        }
-        if((state != LV_STATE_ANY && state_act != state) ||
-           (part != LV_PART_ANY && part_act != part) ||
-           (style != NULL && style != obj->styles[i].style)) {
-            i++;
-            continue;
-        }
-
-        if(obj->styles[i].is_trans) {
-            trans_delete(obj, part, LV_STYLE_PROP_ANY, NULL);
-        }
-
-        if(obj->styles[i].is_local || obj->styles[i].is_trans) {
-            if(obj->styles[i].style) lv_style_reset((lv_style_t *)obj->styles[i].style);
-            lv_free((lv_style_t *)obj->styles[i].style);
-            obj->styles[i].style = NULL;
-        }
-
-        /*Shift the styles after `i` by one*/
-        uint32_t j;
-        for(j = i; j < (uint32_t)obj->style_cnt - 1 ; j++) {
-            obj->styles[j] = obj->styles[j + 1];
-        }
-
-        obj->style_cnt--;
-        obj->styles = lv_realloc(obj->styles, obj->style_cnt * sizeof(lv_obj_style_t));
-
-        deleted = true;
-        /*The style from the current `i` index is removed, so `i` points to the next style.
-         *Therefore it doesn't needs to be incremented*/
-    }
-
-    if(deleted && prop != LV_STYLE_PROP_INV) {
-        full_cache_refresh(obj, part);
-        lv_obj_refresh_style(obj, part, prop);
-    }
-}
-
-
-
-#if LV_USE_OBSERVER
-
-static void bind_style_observer_cb(lv_observer_t * observer, lv_subject_t * subject)
-{
-    bind_style_t * p = observer->user_data;
-
-    int32_t v = lv_subject_get_int(subject);
-    bool dis = (v != p->value);
-    lv_obj_style_set_disabled(observer->target, p->style, p->selector, dis);
-}
-
-static void bind_style_prop_observer_cb(lv_observer_t * observer, lv_subject_t * subject)
-{
-    bind_style_prop_t * p = observer->user_data;
-
-    lv_style_value_t style_v;
-    if(subject->type == LV_SUBJECT_TYPE_INT) style_v.num = lv_subject_get_int(subject);
-    else if(subject->type == LV_SUBJECT_TYPE_COLOR) style_v.color = lv_subject_get_color(subject);
-    else if(subject->type == LV_SUBJECT_TYPE_POINTER) style_v.ptr = lv_subject_get_pointer(subject);
-    else {
-        LV_LOG_WARN("Not supported subject type (%"LV_PRIu32")", (uint32_t) subject->type);
-        return;
-    }
-
-    lv_obj_set_local_style_prop(observer->target, p->prop, style_v, p->selector);
-}
-
-
-#endif /*LV_USE_OBSERVER*/

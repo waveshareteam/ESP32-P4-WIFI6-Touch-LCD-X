@@ -19,16 +19,16 @@ import discover_arduino_examples as discovery  # noqa: E402
 
 
 EXAMPLES = (
-    "examples/arduino/examples/01_DisplayColorBars",
-    "examples/arduino/examples/02_TouchDrawing",
-    "examples/arduino/examples/03_AsciiTable",
-    "examples/arduino/examples/04_LVGLV9",
-    "examples/arduino/examples/05_WiFiAnalyzer",
-    "examples/arduino/examples/06_CameraPreview",
-    "examples/arduino/examples/07_CameraISPTuning",
-    "examples/arduino/examples/08_SDCard",
-    "examples/arduino/examples/09_AudioPlayback",
-    "examples/arduino/examples/10_MicRecord",
+    "examples/arduino/examples/01_HelloWorld",
+    "examples/arduino/examples/02_AsciiTable",
+    "examples/arduino/examples/03_Drawing_board",
+    "examples/arduino/examples/04_LVGLV9_Arduino",
+    "examples/arduino/examples/05_GFX_ESPWiFiAnalyzer",
+    "examples/arduino/examples/06_Camera_Preview",
+    "examples/arduino/examples/07_Camera_ISP_Tuning",
+    "examples/arduino/examples/08_SD_Card",
+    "examples/arduino/examples/09_Audio_Playback",
+    "examples/arduino/examples/10_Mic_Record",
 )
 
 
@@ -40,16 +40,16 @@ class ArduinoDiscoveryTests(unittest.TestCase):
         self.assertEqual(
             tuple(path.name for path in map(Path, EXAMPLES)),
             (
-                "01_DisplayColorBars",
-                "02_TouchDrawing",
-                "03_AsciiTable",
-                "04_LVGLV9",
-                "05_WiFiAnalyzer",
-                "06_CameraPreview",
-                "07_CameraISPTuning",
-                "08_SDCard",
-                "09_AudioPlayback",
-                "10_MicRecord",
+                "01_HelloWorld",
+                "02_AsciiTable",
+                "03_Drawing_board",
+                "04_LVGLV9_Arduino",
+                "05_GFX_ESPWiFiAnalyzer",
+                "06_Camera_Preview",
+                "07_Camera_ISP_Tuning",
+                "08_SD_Card",
+                "09_Audio_Playback",
+                "10_Mic_Record",
             ),
         )
         actual_directories = tuple(
@@ -78,13 +78,14 @@ class ArduinoDiscoveryTests(unittest.TestCase):
         )
 
     def test_direct_sketch_change_selects_only_that_sketch_for_all_variants(self) -> None:
-        selected = discovery.discover_from_paths([f"{EXAMPLES[1]}/02_TouchDrawing.ino"], set(EXAMPLES))
+        selected = discovery.discover_from_paths([f"{EXAMPLES[1]}/02_AsciiTable.ino"], set(EXAMPLES))
         self.assertEqual(selected, [EXAMPLES[1]])
         self.assertEqual(len(discovery.build_matrix(selected)["include"]), 3)
 
     def test_shared_library_and_arduino_ci_inputs_select_every_sketch(self) -> None:
         for path in (
-            "examples/arduino/libraries/lcd_x/src/lcd_x_board.h",
+            "examples/arduino/libraries/displays/gt911.cpp",
+            "examples/arduino/libraries/GFX_Library_for_Arduino/src/Arduino_GFX_Library.h",
             ".github/workflows/arduino-examples.yml",
             ".github/scripts/discover_arduino_examples.py",
             ".github/scripts/test_discover_arduino_examples.py",
@@ -99,7 +100,7 @@ class ArduinoDiscoveryTests(unittest.TestCase):
         for path in (
             "README.md",
             f"{EXAMPLES[0]}/README.md",
-            "examples/arduino/libraries/lcd_x/LICENSE",
+            "examples/arduino/libraries/GFX_Library_for_Arduino/LICENSE",
             "firmware/brookesia/main/app_main.c",
             "examples/esp-idf/01_HowToCreateProject/main/main.c",
             ".github/workflows/esp-idf-examples.yml",
@@ -109,7 +110,7 @@ class ArduinoDiscoveryTests(unittest.TestCase):
                 self.assertEqual(discovery.discover_from_paths([path], set(EXAMPLES)), [])
 
     def test_rename_and_unknown_paths_are_conservative(self) -> None:
-        paths = discovery.parse_name_status(["R100", f"{EXAMPLES[0]}/01_DisplayColorBars.ino", "config/shared-build-input.h"])
+        paths = discovery.parse_name_status(["R100", f"{EXAMPLES[0]}/01_HelloWorld.ino", "config/shared-build-input.h"])
         self.assertEqual(discovery.discover_from_paths(paths, set(EXAMPLES)), list(EXAMPLES))
         self.assertEqual(discovery.discover_from_paths(["unclassified-source.txt"], set(EXAMPLES)), list(EXAMPLES))
 
@@ -126,7 +127,7 @@ class ArduinoDiscoveryTests(unittest.TestCase):
             output = Path(directory) / "github-output.txt"
             stdout = io.StringIO()
             with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(output)}), contextlib.redirect_stdout(stdout):
-                self.assertEqual(discovery.main(["--example", "01_DisplayColorBars", "--variant", "lcd-8"]), 0)
+                self.assertEqual(discovery.main(["--example", "01_HelloWorld", "--variant", "lcd-8"]), 0)
             values = dict(line.split("=", 1) for line in output.read_text(encoding="utf-8").splitlines())
         self.assertEqual(len(json.loads(values["matrix"])["include"]), 1)
         self.assertEqual(values["has_examples"], "true")

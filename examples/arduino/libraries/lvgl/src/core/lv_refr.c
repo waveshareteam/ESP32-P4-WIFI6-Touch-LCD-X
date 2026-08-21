@@ -10,7 +10,7 @@
 #include "lv_obj_draw_private.h"
 #include "../misc/lv_area_private.h"
 #include "../draw/sw/lv_draw_sw_mask_private.h"
-#include "../draw/lv_draw_mask.h"
+#include "../draw/lv_draw_mask_private.h"
 #include "lv_obj_private.h"
 #include "lv_obj_event_private.h"
 #include "../display/lv_display.h"
@@ -21,6 +21,7 @@
 #include "../misc/lv_profiler.h"
 #include "../misc/lv_types.h"
 #include "../draw/lv_draw_private.h"
+#include "../font/lv_font_fmt_txt.h"
 #include "../stdlib/lv_string.h"
 #include "lv_global.h"
 
@@ -43,18 +44,13 @@ static void refr_invalid_areas(void);
 static void refr_sync_areas(void);
 static void refr_area(const lv_area_t * area_p, int32_t y_offset);
 static void refr_configured_layer(lv_layer_t * layer);
+static lv_obj_t * lv_refr_get_top_obj(const lv_area_t * area_p, lv_obj_t * obj);
 static void refr_obj_and_children(lv_layer_t * layer, lv_obj_t * top_obj);
+static void refr_obj(lv_layer_t * layer, lv_obj_t * obj);
 static uint32_t get_max_row(lv_display_t * disp, int32_t area_w, int32_t area_h);
 static void draw_buf_flush(lv_display_t * disp);
 static void call_flush_cb(lv_display_t * disp, const lv_area_t * area, uint8_t * px_map);
 static void wait_for_flushing(lv_display_t * disp);
-static lv_result_t layer_get_area(lv_layer_t * layer, lv_obj_t * obj, lv_layer_type_t layer_type,
-                                  lv_area_t * layer_area_out, lv_area_t * obj_draw_size_out);
-static bool alpha_test_area_on_obj(lv_obj_t * obj, const lv_area_t * area);
-#if LV_DRAW_TRANSFORM_USE_MATRIX
-    static bool refr_check_obj_clip_overflow(lv_layer_t * layer, lv_obj_t * obj);
-    static void refr_obj_matrix(lv_layer_t * layer, lv_obj_t * obj);
-#endif
 
 /**********************
  *  STATIC VARIABLES
@@ -106,10 +102,6 @@ void lv_obj_redraw(lv_layer_t * layer, lv_obj_t * obj)
     LV_PROFILER_REFR_BEGIN;
     lv_area_t clip_area_ori = layer->_clip_area;
     lv_area_t clip_coords_for_obj;
-
-    /*The widget will be rendered.
-     *So setters from now should use animations. */
-    obj->rendered = 1;
 
     /*Truncate the clip area to `obj size + ext size` area*/
     lv_area_t obj_coords_ext;
@@ -175,7 +167,7 @@ void lv_obj_redraw(lv_layer_t * layer, lv_obj_t * obj)
             if(clip_corner == false) {
                 for(i = 0; i < child_cnt; i++) {
                     lv_obj_t * child = obj->spec_attr->children[i];
-                    lv_obj_refr(layer, child);
+                    refr_obj(layer, child);
                 }
 
                 /*If the object was visible on the clip area call the post draw events too*/
@@ -204,7 +196,7 @@ void lv_obj_redraw(lv_layer_t * layer, lv_obj_t * obj)
 
                     for(i = 0; i < child_cnt; i++) {
                         lv_obj_t * child = obj->spec_attr->children[i];
-                        lv_obj_refr(layer_children, child);
+                        refr_obj(layer_children, child);
                     }
 
                     /*If all the children are redrawn send 'post draw' draw*/
@@ -225,7 +217,7 @@ void lv_obj_redraw(lv_layer_t * layer, lv_obj_t * obj)
 
                     for(i = 0; i < child_cnt; i++) {
                         lv_obj_t * child = obj->spec_attr->children[i];
-                        lv_obj_refr(layer_children, child);
+                        refr_obj(layer_children, child);
                     }
 
                     /*If all the children are redrawn send 'post draw' draw*/
@@ -247,7 +239,7 @@ void lv_obj_redraw(lv_layer_t * layer, lv_obj_t * obj)
                     layer->_clip_area = mid;
                     for(i = 0; i < child_cnt; i++) {
                         lv_obj_t * child = obj->spec_attr->children[i];
-                        lv_obj_refr(layer, child);
+                        refr_obj(layer, child);
                     }
 
                     /*If all the children are redrawn make 'post draw' draw*/
@@ -262,15 +254,14 @@ void lv_obj_redraw(lv_layer_t * layer, lv_obj_t * obj)
     }
 
     layer->_clip_area = clip_area_ori;
-
     LV_PROFILER_REFR_END;
 }
 
-lv_result_t lv_inv_area(lv_display_t * disp, const lv_area_t * area_p)
+void lv_inv_area(lv_display_t * disp, const lv_area_t * area_p)
 {
     if(!disp) disp = lv_display_get_default();
-    if(!disp) return LV_RESULT_INVALID;
-    if(!lv_display_is_invalidation_enabled(disp)) return LV_RESULT_INVALID;
+    if(!disp) return;
+    if(!lv_display_is_invalidation_enabled(disp)) return;
 
     /**
      * There are two reasons for this issue:
@@ -288,7 +279,7 @@ lv_result_t lv_inv_area(lv_display_t * disp, const lv_area_t * area_p)
     /*Clear the invalidate buffer if the parameter is NULL*/
     if(area_p == NULL) {
         disp->inv_p = 0;
-        return LV_RESULT_OK;
+        return;
     }
 
     lv_area_t scr_area;
@@ -301,7 +292,7 @@ lv_result_t lv_inv_area(lv_display_t * disp, const lv_area_t * area_p)
     bool suc;
 
     suc = lv_area_intersect(&com_area, area_p, &scr_area);
-    if(suc == false)  return LV_RESULT_INVALID; /*Out of the screen*/
+    if(suc == false)  return; /*Out of the screen*/
 
     if(disp->color_format == LV_COLOR_FORMAT_I1) {
         /*Make sure that the X coordinates start and end on byte boundary.
@@ -315,16 +306,16 @@ lv_result_t lv_inv_area(lv_display_t * disp, const lv_area_t * area_p)
         disp->inv_areas[0] = scr_area;
         disp->inv_p = 1;
         lv_display_send_event(disp, LV_EVENT_REFR_REQUEST, NULL);
-        return LV_RESULT_OK;
+        return;
     }
 
     lv_result_t res = lv_display_send_event(disp, LV_EVENT_INVALIDATE_AREA, &com_area);
-    if(res != LV_RESULT_OK) return LV_RESULT_INVALID;
+    if(res != LV_RESULT_OK) return;
 
     /*Save only if this area is not in one of the saved areas*/
     uint16_t i;
     for(i = 0; i < disp->inv_p; i++) {
-        if(lv_area_is_in(&com_area, &disp->inv_areas[i], 0) != false) return LV_RESULT_OK;
+        if(lv_area_is_in(&com_area, &disp->inv_areas[i], 0) != false) return;
     }
 
     /*Save the area*/
@@ -337,8 +328,6 @@ lv_result_t lv_inv_area(lv_display_t * disp, const lv_area_t * area_p)
     disp->inv_p++;
 
     lv_display_send_event(disp, LV_EVENT_REFR_REQUEST, NULL);
-
-    return LV_RESULT_OK;
 }
 
 /**
@@ -390,12 +379,7 @@ void lv_display_refr_timer(lv_timer_t * tmr)
         return;
     }
 
-    lv_result_t res = lv_display_send_event(disp_refr, LV_EVENT_REFR_START, NULL);
-    if(res == LV_RESULT_INVALID) {
-        LV_TRACE_REFR("deleted");
-        LV_PROFILER_REFR_END;
-        return;
-    }
+    lv_display_send_event(disp_refr, LV_EVENT_REFR_START, NULL);
 
     /*Refresh the screen's layout if required*/
     LV_PROFILER_LAYOUT_BEGIN_TAG("layout");
@@ -446,166 +430,6 @@ refr_finish:
 
     LV_TRACE_REFR("finished");
     LV_PROFILER_REFR_END;
-}
-
-/**
- * Search the most top object which fully covers an area
- * @param area_p pointer to an area
- * @param obj the first object to start the searching (typically a screen)
- * @return
- */
-lv_obj_t * lv_refr_get_top_obj(const lv_area_t * area_p, lv_obj_t * obj)
-{
-    lv_obj_t * found_p = NULL;
-
-    if(lv_area_is_in(area_p, &obj->coords, 0) == false) return NULL;
-    if(lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN)) return NULL;
-    if(lv_obj_get_layer_type(obj) != LV_LAYER_TYPE_NONE) return NULL;
-    if(lv_obj_get_style_opa(obj, LV_PART_MAIN) < LV_OPA_MAX) return NULL;
-
-    /*If this object is fully cover the draw area then check the children too*/
-    lv_cover_check_info_t info;
-    info.res = LV_COVER_RES_COVER;
-    info.area = area_p;
-    lv_obj_send_event(obj, LV_EVENT_COVER_CHECK, &info);
-    if(info.res == LV_COVER_RES_MASKED) return NULL;
-
-    int32_t i;
-    int32_t child_cnt = lv_obj_get_child_count(obj);
-    for(i = child_cnt - 1; i >= 0; i--) {
-        lv_obj_t * child = obj->spec_attr->children[i];
-        found_p = lv_refr_get_top_obj(area_p, child);
-
-        /*If a children is ok then break*/
-        if(found_p != NULL) {
-            break;
-        }
-    }
-
-    /*If no better children use this object*/
-    if(found_p == NULL && info.res == LV_COVER_RES_COVER) {
-        found_p = obj;
-    }
-
-    return found_p;
-}
-
-
-void lv_obj_refr(lv_layer_t * layer, lv_obj_t * obj)
-{
-    LV_ASSERT_NULL(layer);
-    LV_ASSERT_NULL(obj);
-    if(lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN)) return;
-
-    /*If `opa_layered != LV_OPA_COVER` draw the widget on a new layer and blend that layer with the given opacity.*/
-    const lv_opa_t opa_layered = lv_obj_get_style_opa_layered(obj, LV_PART_MAIN);
-    if(opa_layered <= LV_OPA_MIN) return;
-
-    const lv_opa_t layer_opa_ori = layer->opa;
-    const lv_color32_t layer_recolor = layer->recolor;
-
-    /*Normal `opa` (not layered) will just scale down `bg_opa`, `text_opa`, etc, in the upcoming drawings.*/
-    const lv_opa_t opa_main = lv_obj_get_style_opa(obj, LV_PART_MAIN);
-    if(opa_main < LV_OPA_MAX) {
-        layer->opa = LV_OPA_MIX2(layer_opa_ori, opa_main);
-    }
-
-    layer->recolor = lv_obj_style_apply_recolor(obj, LV_PART_MAIN, layer->recolor);
-
-    lv_layer_type_t layer_type = lv_obj_get_layer_type(obj);
-    if(layer_type == LV_LAYER_TYPE_NONE) {
-        lv_obj_redraw(layer, obj);
-    }
-#if LV_DRAW_TRANSFORM_USE_MATRIX
-    /*If the layer opa is full then use the matrix transform*/
-    else if(opa_layered >= LV_OPA_MAX && !refr_check_obj_clip_overflow(layer, obj)) {
-        refr_obj_matrix(layer, obj);
-    }
-#endif /* LV_DRAW_TRANSFORM_USE_MATRIX */
-    else {
-        lv_area_t layer_area_full;
-        lv_area_t obj_draw_size;
-        lv_result_t res = layer_get_area(layer, obj, layer_type, &layer_area_full, &obj_draw_size);
-        if(res != LV_RESULT_OK) {
-            layer->opa = layer_opa_ori;
-            layer->recolor = layer_recolor;
-            return;
-        }
-
-        /*Simple layers can be subdivided into smaller layers*/
-        uint32_t max_rgb_row_height = lv_area_get_height(&layer_area_full);
-        uint32_t max_argb_row_height = lv_area_get_height(&layer_area_full);
-        if(layer_type == LV_LAYER_TYPE_SIMPLE) {
-            int32_t w = lv_area_get_width(&layer_area_full);
-            uint8_t px_size = lv_color_format_get_size(disp_refr->color_format);
-            max_rgb_row_height = LV_DRAW_LAYER_SIMPLE_BUF_SIZE / w / px_size;
-            max_argb_row_height = LV_DRAW_LAYER_SIMPLE_BUF_SIZE / w / sizeof(lv_color32_t);
-        }
-
-        lv_area_t layer_area_act;
-        layer_area_act.x1 = layer_area_full.x1;
-        layer_area_act.x2 = layer_area_full.x2;
-        layer_area_act.y1 = layer_area_full.y1;
-        layer_area_act.y2 = layer_area_full.y1;
-
-        while(layer_area_act.y2 < layer_area_full.y2) {
-            /* Test with an RGB layer size (which is larger than the ARGB layer size)
-             * If it really doesn't need alpha use it. Else switch to the ARGB size*/
-            layer_area_act.y2 = layer_area_act.y1 + max_rgb_row_height - 1;
-            if(layer_area_act.y2 > layer_area_full.y2) layer_area_act.y2 = layer_area_full.y2;
-
-            const void * bitmap_mask_src = lv_obj_get_style_bitmap_mask_src(obj, LV_PART_MAIN);
-            bool area_need_alpha = bitmap_mask_src || alpha_test_area_on_obj(obj, &layer_area_act);
-
-            if(area_need_alpha) {
-                layer_area_act.y2 = layer_area_act.y1 + max_argb_row_height - 1;
-                if(layer_area_act.y2 > layer_area_full.y2) layer_area_act.y2 = layer_area_full.y2;
-            }
-
-            lv_layer_t * new_layer = lv_draw_layer_create(layer,
-                                                          area_need_alpha ? LV_COLOR_FORMAT_ARGB8888 : LV_COLOR_FORMAT_NATIVE, &layer_area_act);
-            lv_obj_redraw(new_layer, obj);
-
-            lv_point_t pivot = {
-                .x = lv_obj_get_style_transform_pivot_x(obj, LV_PART_MAIN),
-                .y = lv_obj_get_style_transform_pivot_y(obj, LV_PART_MAIN)
-            };
-
-            if(LV_COORD_IS_PCT(pivot.x)) {
-                pivot.x = (LV_COORD_GET_PCT(pivot.x) * lv_area_get_width(&obj->coords)) / 100;
-            }
-            if(LV_COORD_IS_PCT(pivot.y)) {
-                pivot.y = (LV_COORD_GET_PCT(pivot.y) * lv_area_get_height(&obj->coords)) / 100;
-            }
-
-            lv_draw_image_dsc_t layer_draw_dsc;
-            lv_draw_image_dsc_init(&layer_draw_dsc);
-            layer_draw_dsc.pivot.x = obj->coords.x1 + pivot.x - new_layer->buf_area.x1;
-            layer_draw_dsc.pivot.y = obj->coords.y1 + pivot.y - new_layer->buf_area.y1;
-
-            layer_draw_dsc.opa = opa_layered;
-            layer_draw_dsc.rotation = lv_obj_get_style_transform_rotation(obj, LV_PART_MAIN);
-            while(layer_draw_dsc.rotation > 3600) layer_draw_dsc.rotation -= 3600;
-            while(layer_draw_dsc.rotation < 0) layer_draw_dsc.rotation += 3600;
-            layer_draw_dsc.scale_x = lv_obj_get_style_transform_scale_x(obj, LV_PART_MAIN);
-            layer_draw_dsc.scale_y = lv_obj_get_style_transform_scale_y(obj, LV_PART_MAIN);
-            layer_draw_dsc.skew_x = lv_obj_get_style_transform_skew_x(obj, LV_PART_MAIN);
-            layer_draw_dsc.skew_y = lv_obj_get_style_transform_skew_y(obj, LV_PART_MAIN);
-            layer_draw_dsc.blend_mode = lv_obj_get_style_blend_mode(obj, LV_PART_MAIN);
-            layer_draw_dsc.antialias = disp_refr->antialiasing;
-            layer_draw_dsc.bitmap_mask_src = bitmap_mask_src;
-            layer_draw_dsc.image_area = obj_draw_size;
-            layer_draw_dsc.src = new_layer;
-
-            lv_draw_layer(layer, &layer_draw_dsc, &layer_area_act);
-
-            layer_area_act.y1 = layer_area_act.y2 + 1;
-        }
-    }
-
-    /* Restore the original layer opa and recolor */
-    layer->opa = layer_opa_ori;
-    layer->recolor = layer_recolor;
 }
 
 /**********************
@@ -761,9 +585,6 @@ static void refr_invalid_areas(void)
     if(disp_refr->inv_p == 0) return;
     LV_PROFILER_REFR_BEGIN;
 
-    /*Notify the display driven rendering has started*/
-    lv_display_send_event(disp_refr, LV_EVENT_RENDER_START, NULL);
-
     /*Find the last area which will be drawn*/
     int32_t i;
     int32_t last_i = 0;
@@ -773,6 +594,9 @@ static void refr_invalid_areas(void)
             break;
         }
     }
+
+    /*Notify the display driven rendering has started*/
+    lv_display_send_event(disp_refr, LV_EVENT_RENDER_START, NULL);
 
     disp_refr->last_area = 0;
     disp_refr->last_part = 0;
@@ -863,7 +687,6 @@ static void refr_area(const lv_area_t * area_p, int32_t y_offset)
     layer->_clip_area = *area_p;
     layer->phy_clip_area = *area_p;
     layer->partial_y_offset = y_offset;
-    layer->all_tasks_added = false;
 
     if(disp_refr->render_mode == LV_DISPLAY_RENDER_MODE_PARTIAL) {
         /*In partial mode render this area to the buffer*/
@@ -872,7 +695,7 @@ static void refr_area(const lv_area_t * area_p, int32_t y_offset)
     }
     else if(disp_refr->render_mode == LV_DISPLAY_RENDER_MODE_DIRECT ||
             disp_refr->render_mode == LV_DISPLAY_RENDER_MODE_FULL) {
-        /*In direct mode and full mode the buffer area is always the whole screen, not considering rotation*/
+        /*In direct mode and full mode the the buffer area is always the whole screen, not considering rotation*/
         layer->buf_area.x1 = 0;
         layer->buf_area.y1 = 0;
         if(lv_display_get_matrix_rotation(disp_refr)) {
@@ -890,7 +713,7 @@ static void refr_area(const lv_area_t * area_p, int32_t y_offset)
     uint32_t tile_cnt = 1;
     int32_t tile_h = lv_area_get_height(area_p);
     if(LV_COLOR_FORMAT_IS_INDEXED(layer->color_format) == false) {
-        /* Assume that the buffer size (can be screen sized or smaller in case of partial mode)
+        /* Assume that the the buffer size (can be screen sized or smaller in case of partial mode)
          * and max tile size are the optimal scenario. From this calculate the ideal tile size
          * and set the tile count and tile height accordingly.
          */
@@ -905,7 +728,6 @@ static void refr_area(const lv_area_t * area_p, int32_t y_offset)
 
     if(tile_cnt == 1) {
         refr_configured_layer(layer);
-        layer->all_tasks_added = true;
     }
     else {
         /* Don't draw to the layers buffer of the display but create smaller dummy layers which are using the
@@ -933,7 +755,6 @@ static void refr_area(const lv_area_t * area_p, int32_t y_offset)
             tile_layer->buf_area = layer->buf_area; /*the buffer is still large*/
             tile_layer->draw_buf = layer->draw_buf;
             refr_configured_layer(tile_layer);
-            tile_layer->all_tasks_added = true;
         }
 
 
@@ -954,12 +775,9 @@ static void refr_area(const lv_area_t * area_p, int32_t y_offset)
                 layer_i = layer_i->next;
             }
 
-            lv_draw_unit_send_event(NULL, LV_EVENT_CHILD_DELETED, tile_layer);
             if(disp_refr->layer_deinit) disp_refr->layer_deinit(disp_refr, tile_layer);
         }
         lv_free(tile_layers);
-
-        layer->all_tasks_added = true;
     }
 
     disp_refr->refreshed_area = *area_p;
@@ -1085,6 +903,48 @@ static void refr_configured_layer(lv_layer_t * layer)
 }
 
 /**
+ * Search the most top object which fully covers an area
+ * @param area_p pointer to an area
+ * @param obj the first object to start the searching (typically a screen)
+ * @return
+ */
+static lv_obj_t * lv_refr_get_top_obj(const lv_area_t * area_p, lv_obj_t * obj)
+{
+    lv_obj_t * found_p = NULL;
+
+    if(lv_area_is_in(area_p, &obj->coords, 0) == false) return NULL;
+    if(lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN)) return NULL;
+    if(lv_obj_get_layer_type(obj) != LV_LAYER_TYPE_NONE) return NULL;
+    if(lv_obj_get_style_opa(obj, LV_PART_MAIN) < LV_OPA_MAX) return NULL;
+
+    /*If this object is fully cover the draw area then check the children too*/
+    lv_cover_check_info_t info;
+    info.res = LV_COVER_RES_COVER;
+    info.area = area_p;
+    lv_obj_send_event(obj, LV_EVENT_COVER_CHECK, &info);
+    if(info.res == LV_COVER_RES_MASKED) return NULL;
+
+    int32_t i;
+    int32_t child_cnt = lv_obj_get_child_count(obj);
+    for(i = child_cnt - 1; i >= 0; i--) {
+        lv_obj_t * child = obj->spec_attr->children[i];
+        found_p = lv_refr_get_top_obj(area_p, child);
+
+        /*If a children is ok then break*/
+        if(found_p != NULL) {
+            break;
+        }
+    }
+
+    /*If no better children use this object*/
+    if(found_p == NULL && info.res == LV_COVER_RES_COVER) {
+        found_p = obj;
+    }
+
+    return found_p;
+}
+
+/**
  * Make the refreshing from an object. Draw all its children and the youngers too.
  * @param top_p pointer to an objects. Start the drawing from it.
  * @param mask_p pointer to an area, the objects will be drawn only here
@@ -1110,7 +970,7 @@ static void refr_obj_and_children(lv_layer_t * layer, lv_obj_t * top_obj)
     }
 
     /*Refresh the top object and its children*/
-    lv_obj_refr(layer, top_obj);
+    refr_obj(layer, top_obj);
 
     /*Do until not reach the screen*/
     while(parent != NULL) {
@@ -1124,7 +984,7 @@ static void refr_obj_and_children(lv_layer_t * layer, lv_obj_t * top_obj)
             }
             else {
                 /*Refresh the objects*/
-                lv_obj_refr(layer, child);
+                refr_obj(layer, child);
             }
         }
 
@@ -1215,18 +1075,18 @@ static bool obj_get_matrix(lv_obj_t * obj, lv_matrix_t * matrix)
     }
 
     lv_point_t pivot = {
-        .x = lv_obj_get_style_transform_pivot_x(obj, LV_PART_MAIN),
-        .y = lv_obj_get_style_transform_pivot_y(obj, LV_PART_MAIN)
+        .x = lv_obj_get_style_transform_pivot_x(obj, 0),
+        .y = lv_obj_get_style_transform_pivot_y(obj, 0)
     };
 
     pivot.x = obj->coords.x1 + lv_pct_to_px(pivot.x, lv_area_get_width(&obj->coords));
     pivot.y = obj->coords.y1 + lv_pct_to_px(pivot.y, lv_area_get_height(&obj->coords));
 
-    int32_t rotation = lv_obj_get_style_transform_rotation(obj, LV_PART_MAIN);
-    int32_t scale_x = lv_obj_get_style_transform_scale_x(obj, LV_PART_MAIN);
-    int32_t scale_y = lv_obj_get_style_transform_scale_y(obj, LV_PART_MAIN);
-    int32_t skew_x = lv_obj_get_style_transform_skew_x(obj, LV_PART_MAIN);
-    int32_t skew_y = lv_obj_get_style_transform_skew_y(obj, LV_PART_MAIN);
+    int32_t rotation = lv_obj_get_style_transform_rotation(obj, 0);
+    int32_t scale_x = lv_obj_get_style_transform_scale_x(obj, 0);
+    int32_t scale_y = lv_obj_get_style_transform_scale_y(obj, 0);
+    int32_t skew_x = lv_obj_get_style_transform_skew_x(obj, 0);
+    int32_t skew_y = lv_obj_get_style_transform_skew_y(obj, 0);
 
     if(scale_x <= 0 || scale_y <= 0) {
         /* NOT draw if scale is negative or zero */
@@ -1302,7 +1162,7 @@ static void refr_obj_matrix(lv_layer_t * layer, lv_obj_t * obj)
 
 static bool refr_check_obj_clip_overflow(lv_layer_t * layer, lv_obj_t * obj)
 {
-    if(lv_obj_get_style_transform_rotation(obj, LV_PART_MAIN) == 0) {
+    if(lv_obj_get_style_transform_rotation(obj, 0) == 0) {
         return false;
     }
 
@@ -1324,6 +1184,117 @@ static bool refr_check_obj_clip_overflow(lv_layer_t * layer, lv_obj_t * obj)
 }
 
 #endif /* LV_DRAW_TRANSFORM_USE_MATRIX */
+
+static void refr_obj(lv_layer_t * layer, lv_obj_t * obj)
+{
+    if(lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN)) return;
+
+    /*If `opa_layered != LV_OPA_COVER` draw the widget on a new layer and blend that layer with the given opacity.*/
+    const lv_opa_t opa_layered = lv_obj_get_style_opa_layered(obj, LV_PART_MAIN);
+    if(opa_layered <= LV_OPA_MIN) return;
+
+    const lv_opa_t layer_opa_ori = layer->opa;
+    const lv_color32_t layer_recolor = layer->recolor;
+
+    /*Normal `opa` (not layered) will just scale down `bg_opa`, `text_opa`, etc, in the upcoming drawings.*/
+    const lv_opa_t opa_main = lv_obj_get_style_opa(obj, LV_PART_MAIN);
+    if(opa_main < LV_OPA_MAX) {
+        layer->opa = LV_OPA_MIX2(layer_opa_ori, opa_main);
+    }
+
+    layer->recolor = lv_obj_style_apply_recolor(obj, LV_PART_MAIN, layer->recolor);
+
+    lv_layer_type_t layer_type = lv_obj_get_layer_type(obj);
+    if(layer_type == LV_LAYER_TYPE_NONE) {
+        lv_obj_redraw(layer, obj);
+    }
+#if LV_DRAW_TRANSFORM_USE_MATRIX
+    /*If the layer opa is full then use the matrix transform*/
+    else if(opa_layered >= LV_OPA_MAX && !refr_check_obj_clip_overflow(layer, obj)) {
+        refr_obj_matrix(layer, obj);
+    }
+#endif /* LV_DRAW_TRANSFORM_USE_MATRIX */
+    else {
+        lv_area_t layer_area_full;
+        lv_area_t obj_draw_size;
+        lv_result_t res = layer_get_area(layer, obj, layer_type, &layer_area_full, &obj_draw_size);
+        if(res != LV_RESULT_OK) return;
+
+        /*Simple layers can be subdivided into smaller layers*/
+        uint32_t max_rgb_row_height = lv_area_get_height(&layer_area_full);
+        uint32_t max_argb_row_height = lv_area_get_height(&layer_area_full);
+        if(layer_type == LV_LAYER_TYPE_SIMPLE) {
+            int32_t w = lv_area_get_width(&layer_area_full);
+            uint8_t px_size = lv_color_format_get_size(disp_refr->color_format);
+            max_rgb_row_height = LV_DRAW_LAYER_SIMPLE_BUF_SIZE / w / px_size;
+            max_argb_row_height = LV_DRAW_LAYER_SIMPLE_BUF_SIZE / w / sizeof(lv_color32_t);
+        }
+
+        lv_area_t layer_area_act;
+        layer_area_act.x1 = layer_area_full.x1;
+        layer_area_act.x2 = layer_area_full.x2;
+        layer_area_act.y1 = layer_area_full.y1;
+        layer_area_act.y2 = layer_area_full.y1;
+
+        while(layer_area_act.y2 < layer_area_full.y2) {
+            /* Test with an RGB layer size (which is larger than the ARGB layer size)
+             * If it really doesn't need alpha use it. Else switch to the ARGB size*/
+            layer_area_act.y2 = layer_area_act.y1 + max_rgb_row_height - 1;
+            if(layer_area_act.y2 > layer_area_full.y2) layer_area_act.y2 = layer_area_full.y2;
+
+            const void * bitmap_mask_src = lv_obj_get_style_bitmap_mask_src(obj, 0);
+            bool area_need_alpha = bitmap_mask_src || alpha_test_area_on_obj(obj, &layer_area_act);
+
+            if(area_need_alpha) {
+                layer_area_act.y2 = layer_area_act.y1 + max_argb_row_height - 1;
+                if(layer_area_act.y2 > layer_area_full.y2) layer_area_act.y2 = layer_area_full.y2;
+            }
+
+            lv_layer_t * new_layer = lv_draw_layer_create(layer,
+                                                          area_need_alpha ? LV_COLOR_FORMAT_ARGB8888 : LV_COLOR_FORMAT_NATIVE, &layer_area_act);
+            lv_obj_redraw(new_layer, obj);
+
+            lv_point_t pivot = {
+                .x = lv_obj_get_style_transform_pivot_x(obj, 0),
+                .y = lv_obj_get_style_transform_pivot_y(obj, 0)
+            };
+
+            if(LV_COORD_IS_PCT(pivot.x)) {
+                pivot.x = (LV_COORD_GET_PCT(pivot.x) * lv_area_get_width(&obj->coords)) / 100;
+            }
+            if(LV_COORD_IS_PCT(pivot.y)) {
+                pivot.y = (LV_COORD_GET_PCT(pivot.y) * lv_area_get_height(&obj->coords)) / 100;
+            }
+
+            lv_draw_image_dsc_t layer_draw_dsc;
+            lv_draw_image_dsc_init(&layer_draw_dsc);
+            layer_draw_dsc.pivot.x = obj->coords.x1 + pivot.x - new_layer->buf_area.x1;
+            layer_draw_dsc.pivot.y = obj->coords.y1 + pivot.y - new_layer->buf_area.y1;
+
+            layer_draw_dsc.opa = opa_layered;
+            layer_draw_dsc.rotation = lv_obj_get_style_transform_rotation(obj, 0);
+            while(layer_draw_dsc.rotation > 3600) layer_draw_dsc.rotation -= 3600;
+            while(layer_draw_dsc.rotation < 0) layer_draw_dsc.rotation += 3600;
+            layer_draw_dsc.scale_x = lv_obj_get_style_transform_scale_x(obj, 0);
+            layer_draw_dsc.scale_y = lv_obj_get_style_transform_scale_y(obj, 0);
+            layer_draw_dsc.skew_x = lv_obj_get_style_transform_skew_x(obj, 0);
+            layer_draw_dsc.skew_y = lv_obj_get_style_transform_skew_y(obj, 0);
+            layer_draw_dsc.blend_mode = lv_obj_get_style_blend_mode(obj, 0);
+            layer_draw_dsc.antialias = disp_refr->antialiasing;
+            layer_draw_dsc.bitmap_mask_src = bitmap_mask_src;
+            layer_draw_dsc.image_area = obj_draw_size;
+            layer_draw_dsc.src = new_layer;
+
+            lv_draw_layer(layer, &layer_draw_dsc, &layer_area_act);
+
+            layer_area_act.y1 = layer_area_act.y2 + 1;
+        }
+    }
+
+    /* Restore the original layer opa and recolor */
+    layer->opa = layer_opa_ori;
+    layer->recolor = layer_recolor;
+}
 
 static uint32_t get_max_row(lv_display_t * disp, int32_t area_w, int32_t area_h)
 {

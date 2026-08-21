@@ -78,7 +78,6 @@ typedef enum {
     LV_EVENT_REFRESH,             /**< Notify Widget to refresh something on it (for user)*/
     LV_EVENT_READY,               /**< A process has finished */
     LV_EVENT_CANCEL,              /**< A process has been cancelled */
-    LV_EVENT_STATE_CHANGED,       /**< The state of the widget changed*/
 
     /** Other events */
     LV_EVENT_CREATE,              /**< Object is being created */
@@ -107,18 +106,14 @@ typedef enum {
     LV_EVENT_REFR_START,          /**< Sent before a refreshing cycle starts. Sent even if there is nothing to redraw. */
     LV_EVENT_REFR_READY,          /**< Sent when refreshing has been completed (after rendering and calling flush callback). Sent even if no redraw happened. */
     LV_EVENT_RENDER_START,        /**< Sent just before rendering begins. */
-    LV_EVENT_RENDER_READY,        /**< Sent after rendering has been completed. */
+    LV_EVENT_RENDER_READY,        /**< Sent after rendering has been completed (before calling flush callback) */
     LV_EVENT_FLUSH_START,         /**< Sent before flush callback is called. */
     LV_EVENT_FLUSH_FINISH,        /**< Sent after flush callback call has returned. */
     LV_EVENT_FLUSH_WAIT_START,    /**< Sent before flush wait callback is called. */
     LV_EVENT_FLUSH_WAIT_FINISH,   /**< Sent after flush wait callback call has returned. */
-    LV_EVENT_UPDATE_LAYOUT_COMPLETED,    /**< Sent after layout update completes*/
 
     LV_EVENT_VSYNC,
     LV_EVENT_VSYNC_REQUEST,
-#if LV_USE_TRANSLATION
-    LV_EVENT_TRANSLATION_LANGUAGE_CHANGED, /**< Sent when the translation language changed. */
-#endif /*LV_USE_TRANSLATION*/
 
     LV_EVENT_LAST,                 /** Number of default events */
 
@@ -201,26 +196,11 @@ void * lv_event_get_user_data(lv_event_t * e);
 void lv_event_stop_bubbling(lv_event_t * e);
 
 /**
- * Stop event from trickling down to children.
- * This is only valid when called in the middle of an event processing chain.
- * @param e     pointer to the event descriptor
- */
-void lv_event_stop_trickling(lv_event_t * e);
-
-/**
  * Stop processing this event.
  * This is only valid when called in the middle of an event processing chain.
  * @param e     pointer to the event descriptor
  */
 void lv_event_stop_processing(lv_event_t * e);
-
-/**
- * Helper function typically used in LV_EVENT_DELETE
- * to free the event's user_data
- * @param e     pointer to an event descriptor
- */
-void lv_event_free_user_data_cb(lv_event_t * e);
-
 
 /**
  * Register a new, custom event ID.
@@ -244,19 +224,6 @@ uint32_t lv_event_register_id(void);
  * @return      the name of the event code as a string
  */
 const char * lv_event_code_get_name(lv_event_code_t code);
-
-#if LV_USE_EXT_DATA
-/**
- * Set external data and its destructor for an event descriptor.
- * This allows associating custom data with an event callback that will be automatically cleaned up
- * when the event descriptor is removed or destroyed.
- * @param dsc         pointer to an event descriptor (from lv_obj_add_event_cb)
- * @param data        pointer to the external data to associate with the event descriptor
- * @param free_cb     function pointer to a destructor that will be called to clean up the external data.
- *                    The destructor will receive the data pointer as its parameter.
- */
-void lv_event_desc_set_external_data(lv_event_dsc_t * dsc, void * data, void (* free_cb)(void * data));
-#endif
 
 /**********************
  *      MACROS

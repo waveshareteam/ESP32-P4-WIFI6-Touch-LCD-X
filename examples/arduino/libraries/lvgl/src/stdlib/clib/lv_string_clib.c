@@ -1,5 +1,5 @@
 /**
- * @file lv_string_clib.c
+ * @file lv_string.c
  */
 
 /*********************

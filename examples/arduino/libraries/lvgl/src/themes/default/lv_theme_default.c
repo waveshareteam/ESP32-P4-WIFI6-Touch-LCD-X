@@ -179,9 +179,8 @@ struct _my_theme_t {
 /**********************
  *  STATIC PROTOTYPES
  **********************/
-static void style_init_reset(lv_style_t * style);
 static void theme_apply(lv_theme_t * th, lv_obj_t * obj);
-static void resolution_change_event_cb(lv_event_t * e);
+static void style_init_reset(lv_style_t * style);
 
 /**********************
  *  STATIC VARIABLES
@@ -631,7 +630,6 @@ lv_theme_t * lv_theme_default_init(lv_display_t * disp, lv_color_t color_primary
 
     if(!lv_theme_default_is_inited()) {
         theme_def = lv_malloc_zeroed(sizeof(my_theme_t));
-        LV_ASSERT_MALLOC(theme_def);
     }
 
     my_theme_t * theme = theme_def;
@@ -639,12 +637,10 @@ lv_theme_t * lv_theme_default_init(lv_display_t * disp, lv_color_t color_primary
     lv_display_t * new_disp = disp == NULL ? lv_display_get_default() : disp;
     int32_t new_dpi = lv_display_get_dpi(new_disp);
     int32_t hor_res = lv_display_get_horizontal_resolution(new_disp);
-    int32_t ver_res = lv_display_get_vertical_resolution(new_disp);
-    int32_t greater_res = LV_MAX(hor_res, ver_res);
     disp_size_t new_size;
 
-    if(greater_res <= 320) new_size = DISP_SMALL;
-    else if(greater_res < 720) new_size = DISP_MEDIUM;
+    if(hor_res <= 320) new_size = DISP_SMALL;
+    else if(hor_res < 720) new_size = DISP_MEDIUM;
     else new_size = DISP_LARGE;
 
     /* check theme information whether will change or not*/
@@ -655,6 +651,7 @@ lv_theme_t * lv_theme_default_init(lv_display_t * disp, lv_color_t color_primary
        (theme->base.flags == (dark ? MODE_DARK : 0)) &&
        theme->base.font_small == font) {
         return (lv_theme_t *) theme;
+
     }
 
     theme->disp_size = new_size;
@@ -667,41 +664,14 @@ lv_theme_t * lv_theme_default_init(lv_display_t * disp, lv_color_t color_primary
     theme->base.font_large = font;
     theme->base.apply_cb = theme_apply;
     theme->base.flags = dark ? MODE_DARK : 0;
-#if LV_USE_EXT_DATA
-    theme->base.ext_data.free_cb = NULL;
-    theme->base.ext_data.data = NULL;
-#endif
 
     style_init(theme);
 
-    if(disp == NULL || lv_display_get_theme(disp) == (lv_theme_t *)theme) {
-        lv_obj_report_style_change(NULL);
-    }
+    if(disp == NULL || lv_display_get_theme(disp) == (lv_theme_t *)theme) lv_obj_report_style_change(NULL);
 
     theme->inited = true;
 
-    /*Re-initialize the styles if the resolution changes as a different display size might
-     *result in different paddings */
-    lv_display_remove_event_cb_with_user_data(new_disp, resolution_change_event_cb, theme);
-    lv_display_add_event_cb(new_disp, resolution_change_event_cb, LV_EVENT_RESOLUTION_CHANGED, theme);
-
     return (lv_theme_t *) theme;
-}
-
-bool lv_theme_default_is_inited(void)
-{
-    my_theme_t * theme = theme_def;
-    if(theme == NULL) return false;
-    return theme->inited;
-}
-
-lv_theme_t * lv_theme_default_get(void)
-{
-    if(!lv_theme_default_is_inited()) {
-        return NULL;
-    }
-
-    return (lv_theme_t *)theme_def;
 }
 
 void lv_theme_default_deinit(void)
@@ -714,21 +684,28 @@ void lv_theme_default_deinit(void)
             for(i = 0; i < sizeof(my_theme_styles_t) / sizeof(lv_style_t); i++) {
                 lv_style_reset(theme_styles + i);
             }
+
         }
-#if LV_USE_EXT_DATA
-        if(theme->base.ext_data.free_cb) {
-            theme->base.ext_data.free_cb(theme->base.ext_data.data);
-            theme->base.ext_data.data = NULL;
-        }
-#endif
         lv_free(theme_def);
         theme_def = NULL;
     }
 }
 
-/**********************
- *   STATIC FUNCTIONS
- **********************/
+lv_theme_t * lv_theme_default_get(void)
+{
+    if(!lv_theme_default_is_inited()) {
+        return NULL;
+    }
+
+    return (lv_theme_t *)theme_def;
+}
+
+bool lv_theme_default_is_inited(void)
+{
+    my_theme_t * theme = theme_def;
+    if(theme == NULL) return false;
+    return theme->inited;
+}
 
 static void theme_apply(lv_theme_t * th, lv_obj_t * obj)
 {
@@ -811,6 +788,7 @@ static void theme_apply(lv_theme_t * th, lv_obj_t * obj)
                 return;
             }
         }
+
 #endif
         lv_obj_add_style(obj, &theme->styles.btn, 0);
         lv_obj_add_style(obj, &theme->styles.bg_color_primary, 0);
@@ -988,6 +966,7 @@ static void theme_apply(lv_theme_t * th, lv_obj_t * obj)
     }
     else if(lv_obj_check_type(obj, &lv_dropdownlist_class)) {
         lv_obj_add_style(obj, &theme->styles.card, 0);
+        lv_obj_add_style(obj, &theme->styles.clip_corner, 0);
         lv_obj_add_style(obj, &theme->styles.line_space_large, 0);
         lv_obj_add_style(obj, &theme->styles.dropdown_list, 0);
         lv_obj_add_style(obj, &theme->styles.scrollbar, LV_PART_SCROLLBAR);
@@ -1090,6 +1069,7 @@ static void theme_apply(lv_theme_t * th, lv_obj_t * obj)
         lv_obj_add_style(obj, &theme->styles.list_item_grow, LV_STATE_FOCUS_KEY);
         lv_obj_add_style(obj, &theme->styles.list_item_grow, LV_STATE_PRESSED);
         lv_obj_add_style(obj, &theme->styles.pressed, LV_STATE_PRESSED);
+
     }
 #endif
 #if LV_USE_MENU
@@ -1142,18 +1122,18 @@ static void theme_apply(lv_theme_t * th, lv_obj_t * obj)
         return;
     }
     else if(lv_obj_check_type(obj, &lv_msgbox_header_class)) {
-        lv_obj_add_style(obj, &theme->styles.pad_small, 0);
+        lv_obj_add_style(obj, &theme->styles.pad_tiny, 0);
         lv_obj_add_style(obj, &theme->styles.bg_color_grey, 0);
         return;
     }
     else if(lv_obj_check_type(obj, &lv_msgbox_footer_class)) {
-        lv_obj_add_style(obj, &theme->styles.pad_small, 0);
+        lv_obj_add_style(obj, &theme->styles.pad_tiny, 0);
         return;
     }
     else if(lv_obj_check_type(obj, &lv_msgbox_content_class)) {
         lv_obj_add_style(obj, &theme->styles.scrollbar, LV_PART_SCROLLBAR);
         lv_obj_add_style(obj, &theme->styles.scrollbar_scrolled, LV_PART_SCROLLBAR | LV_STATE_SCROLLED);
-        lv_obj_add_style(obj, &theme->styles.pad_small, 0);
+        lv_obj_add_style(obj, &theme->styles.pad_tiny, 0);
         return;
     }
     else if(lv_obj_check_type(obj, &lv_msgbox_header_button_class) ||
@@ -1168,6 +1148,7 @@ static void theme_apply(lv_theme_t * th, lv_obj_t * obj)
         lv_obj_add_style(obj, &theme->styles.disabled, LV_STATE_DISABLED);
         return;
     }
+
 #endif
 
 #if LV_USE_SPINBOX
@@ -1219,25 +1200,18 @@ static void theme_apply(lv_theme_t * th, lv_obj_t * obj)
 #endif
 }
 
+/**********************
+ *   STATIC FUNCTIONS
+ **********************/
+
 static void style_init_reset(lv_style_t * style)
 {
-    if(lv_theme_default_is_inited()) {
+    if(theme_def->inited) {
         lv_style_reset(style);
     }
     else {
         lv_style_init(style);
     }
-}
-
-
-static void resolution_change_event_cb(lv_event_t * e)
-{
-    lv_display_t * disp = lv_event_get_target(e);
-    my_theme_t * theme = lv_event_get_user_data(e);
-
-    lv_theme_default_init(disp, theme->base.color_primary, theme->base.color_secondary, theme->base.flags,
-                          theme->base.font_normal);
-
 }
 
 #endif

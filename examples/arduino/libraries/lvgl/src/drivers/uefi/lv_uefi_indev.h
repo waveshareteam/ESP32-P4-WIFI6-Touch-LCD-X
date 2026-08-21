@@ -106,4 +106,3 @@ void lv_uefi_simple_text_input_indev_add_all(lv_indev_t * indev);
 #endif
 
 #endif //__LV_UEFI_INDEV_H__
-

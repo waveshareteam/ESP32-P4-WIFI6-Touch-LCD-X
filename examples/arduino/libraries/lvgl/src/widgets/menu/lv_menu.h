@@ -14,7 +14,6 @@ extern "C" {
  *      INCLUDES
  *********************/
 #include "../../core/lv_obj.h"
-#include "../../core/lv_obj_property.h"
 
 #if LV_USE_MENU
 
@@ -49,15 +48,6 @@ LV_ATTRIBUTE_EXTERN_DATA extern const lv_obj_class_t lv_menu_sidebar_cont_class;
 LV_ATTRIBUTE_EXTERN_DATA extern const lv_obj_class_t lv_menu_main_cont_class;
 LV_ATTRIBUTE_EXTERN_DATA extern const lv_obj_class_t lv_menu_sidebar_header_cont_class;
 LV_ATTRIBUTE_EXTERN_DATA extern const lv_obj_class_t lv_menu_main_header_cont_class;
-
-#if LV_USE_OBJ_PROPERTY
-enum __lv_property_menu_id_t {
-    LV_PROPERTY_ID(MENU, MODE_HEADER,           LV_PROPERTY_TYPE_INT, 0),
-    LV_PROPERTY_ID(MENU, MODE_ROOT_BACK_BUTTON, LV_PROPERTY_TYPE_INT, 1),
-    LV_PROPERTY_MENU_END,
-};
-#endif
-
 /**********************
  * GLOBAL PROTOTYPES
  **********************/
@@ -83,7 +73,7 @@ lv_obj_t * lv_menu_page_create(lv_obj_t * menu, char const * const title);
 
 /**
  * Create a menu cont object
- * @param parent    pointer to a menu page or menu section object, it will be the parent of the new menu cont object
+ * @param parent    pointer to a menu page object, it will be the parent of the new menu cont object
  * @return          pointer to the created menu cont
  */
 lv_obj_t * lv_menu_cont_create(lv_obj_t * parent);
@@ -207,20 +197,6 @@ lv_obj_t * lv_menu_get_sidebar_header_back_button(lv_obj_t * obj);
  * @return          true if it is a root back btn
  */
 bool lv_menu_back_button_is_root(lv_obj_t * menu, lv_obj_t * obj);
-
-/**
- * Get the header mode of the menu
- * @param obj       pointer to a menu
- * @return          LV_MENU_HEADER_TOP_FIXED/TOP_UNFIXED/BOTTOM_FIXED
- */
-lv_menu_mode_header_t lv_menu_get_mode_header(lv_obj_t * obj);
-
-/**
- * Get the root back button mode of the menu
- * @param obj       pointer to a menu
- * @return          LV_MENU_ROOT_BACK_BUTTON_DISABLED/ENABLED
- */
-lv_menu_mode_root_back_button_t lv_menu_get_mode_root_back_button(lv_obj_t * obj);
 
 /**
  * Clear menu history

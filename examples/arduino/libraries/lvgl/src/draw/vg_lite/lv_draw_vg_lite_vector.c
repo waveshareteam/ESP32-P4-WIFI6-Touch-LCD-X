@@ -26,8 +26,6 @@
  *      DEFINES
  *********************/
 
-#define OPA_MIX(opa1, opa2) LV_UDIV255((opa1) * (opa2))
-
 /**********************
  *      TYPEDEFS
  **********************/
@@ -39,7 +37,7 @@ typedef void (*path_drop_func_t)(struct _lv_draw_vg_lite_unit_t *, path_drop_dat
  *  STATIC PROTOTYPES
  **********************/
 
-static void task_draw_cb(void * user_data, const lv_vector_path_t * path, const lv_vector_path_ctx_t * ctx);
+static void task_draw_cb(void * ctx, const lv_vector_path_t * path, const lv_vector_draw_dsc_t * dsc);
 static void lv_path_to_vg(lv_vg_lite_path_t * dest, const lv_vector_path_t * src, lv_fpoint_t * offset,
                           float expand_bound);
 static vg_lite_blend_t lv_blend_to_vg(lv_vector_blend_t blend);
@@ -57,7 +55,7 @@ static vg_lite_fill_t lv_fill_to_vg(lv_vector_fill_t fill_rule);
  *   GLOBAL FUNCTIONS
  **********************/
 
-void lv_draw_vg_lite_vector(lv_draw_task_t * t, const lv_draw_vector_dsc_t * dsc)
+void lv_draw_vg_lite_vector(lv_draw_task_t * t, const lv_draw_vector_task_dsc_t * dsc)
 {
     if(dsc->task_list == NULL)
         return;
@@ -90,16 +88,15 @@ static vg_lite_color_t lv_color32_to_vg(lv_color32_t color, lv_opa_t opa)
 
 static void draw_fill(lv_draw_vg_lite_unit_t * u,
                       lv_vg_lite_path_t * lv_vg_path,
-                      const lv_vector_path_ctx_t * ctx,
+                      const lv_vector_draw_dsc_t * dsc,
                       vg_lite_matrix_t * matrix,
-                      const lv_fpoint_t * offset,
-                      const lv_opa_t opa)
+                      const lv_fpoint_t * offset)
 {
     LV_PROFILER_DRAW_BEGIN;
 
-    const vg_lite_color_t vg_color = lv_color32_to_vg(ctx->fill_dsc.color, OPA_MIX(ctx->fill_dsc.opa, opa));
-    const vg_lite_blend_t blend = lv_blend_to_vg(ctx->blend_mode);
-    const vg_lite_fill_t fill = lv_fill_to_vg(ctx->fill_dsc.fill_rule);
+    const vg_lite_color_t vg_color = lv_color32_to_vg(dsc->fill_dsc.color, dsc->fill_dsc.opa);
+    const vg_lite_blend_t blend = lv_blend_to_vg(dsc->blend_mode);
+    const vg_lite_fill_t fill = lv_fill_to_vg(dsc->fill_dsc.fill_rule);
 
     /* If it is fill mode, the end op code should be added */
     lv_vg_lite_path_end(lv_vg_path);
@@ -107,7 +104,7 @@ static void draw_fill(lv_draw_vg_lite_unit_t * u,
     vg_lite_path_t * vg_path = lv_vg_lite_path_get_path(lv_vg_path);
     LV_VG_LITE_ASSERT_PATH(vg_path);
 
-    switch(ctx->fill_dsc.style) {
+    switch(dsc->fill_dsc.style) {
         case LV_VECTOR_DRAW_STYLE_SOLID: {
                 /* normal draw shape */
                 lv_vg_lite_draw(
@@ -123,32 +120,21 @@ static void draw_fill(lv_draw_vg_lite_unit_t * u,
                 /* draw image */
                 vg_lite_buffer_t image_buffer;
                 lv_image_decoder_dsc_t decoder_dsc;
-                if(lv_vg_lite_buffer_open_image(&image_buffer, &decoder_dsc, ctx->fill_dsc.img_dsc.src, false, true)) {
+                if(lv_vg_lite_buffer_open_image(&image_buffer, &decoder_dsc, dsc->fill_dsc.img_dsc.src, false, true)) {
                     /* Calculate pattern matrix. Should start from path bond box, and also apply fill matrix. */
                     vg_lite_matrix_t pattern_matrix = *matrix;
 
-                    if(ctx->fill_dsc.fill_units == LV_VECTOR_FILL_UNITS_OBJECT_BOUNDING_BOX) {
+                    if(dsc->fill_dsc.fill_units == LV_VECTOR_FILL_UNITS_OBJECT_BOUNDING_BOX) {
                         /* Convert to object bounding box coordinates */
                         vg_lite_translate(offset->x, offset->y, &pattern_matrix);
                     }
 
                     vg_lite_matrix_t fill_matrix;
-                    lv_vg_lite_matrix(&fill_matrix, &ctx->fill_dsc.matrix);
+                    lv_vg_lite_matrix(&fill_matrix, &dsc->fill_dsc.matrix);
                     lv_vg_lite_matrix_multiply(&pattern_matrix, &fill_matrix);
 
-                    const lv_draw_image_dsc_t * img_dsc = &ctx->fill_dsc.img_dsc;
-                    lv_draw_image_dsc_t tmp_dsc;
-                    if(opa < LV_OPA_COVER) {
-                        tmp_dsc = ctx->fill_dsc.img_dsc;
-                        tmp_dsc.opa = OPA_MIX(tmp_dsc.opa, opa);
-                        img_dsc = &tmp_dsc;
-                    }
+                    vg_lite_color_t recolor = lv_vg_lite_image_recolor(&image_buffer, &dsc->fill_dsc.img_dsc);
 
-                    vg_lite_color_t recolor = lv_vg_lite_image_recolor(&image_buffer, img_dsc);
-
-                    if(ctx->fill_dsc.img_dsc.colorkey) {
-                        lv_vg_lite_set_color_key(ctx->fill_dsc.img_dsc.colorkey);
-                    }
                     lv_vg_lite_draw_pattern(
                         &u->target_buffer,
                         vg_path,
@@ -162,36 +148,30 @@ static void draw_fill(lv_draw_vg_lite_unit_t * u,
                         recolor,
                         VG_LITE_FILTER_BI_LINEAR);
 
-                    if(ctx->fill_dsc.img_dsc.colorkey) {
-                        lv_vg_lite_set_color_key(NULL);
-                    }
-
                     lv_vg_lite_pending_add(u->image_dsc_pending, &decoder_dsc);
                 }
             }
             break;
         case LV_VECTOR_DRAW_STYLE_GRADIENT: {
                 vg_lite_matrix_t grad_matrix = *matrix;
-                vg_lite_matrix_t fill_matrix;
-                lv_vg_lite_matrix(&fill_matrix, &ctx->fill_dsc.matrix);
-                lv_vg_lite_matrix_multiply(&grad_matrix, &fill_matrix);
 
-                const lv_vector_gradient_t * gradient = &ctx->fill_dsc.gradient;
-                lv_vector_gradient_t tmp_gradient;
-                if(opa < LV_OPA_COVER) {
-                    tmp_gradient = ctx->fill_dsc.gradient;
-                    for(uint16_t i = 0; i < tmp_gradient.stops_count; i++) {
-                        tmp_gradient.stops[i].opa = OPA_MIX(tmp_gradient.stops[i].opa, opa);
-                    }
-
-                    gradient = &tmp_gradient;
+#if LV_USE_VG_LITE_THORVG
+                /* Workaround inconsistent radial gradient matrix behavior between device and ThorVG */
+                if(dsc->fill_dsc.gradient.style == LV_VECTOR_GRADIENT_STYLE_RADIAL) {
+                    /* Restore matrix to identity */
+                    vg_lite_identity(&grad_matrix);
                 }
+#endif
+
+                vg_lite_matrix_t fill_matrix;
+                lv_vg_lite_matrix(&fill_matrix, &dsc->fill_dsc.matrix);
+                lv_vg_lite_matrix_multiply(&grad_matrix, &fill_matrix);
 
                 lv_vg_lite_draw_grad(
                     u->grad_ctx,
                     &u->target_buffer,
                     vg_path,
-                    gradient,
+                    &dsc->fill_dsc.gradient,
                     &grad_matrix,
                     matrix,
                     fill,
@@ -199,7 +179,7 @@ static void draw_fill(lv_draw_vg_lite_unit_t * u,
             }
             break;
         default:
-            LV_LOG_WARN("unsupported style: %d", ctx->fill_dsc.style);
+            LV_LOG_WARN("unsupported style: %d", dsc->fill_dsc.style);
             break;
     }
 
@@ -209,16 +189,15 @@ static void draw_fill(lv_draw_vg_lite_unit_t * u,
 static void draw_stroke(lv_draw_vg_lite_unit_t * u,
                         const lv_vector_path_t * path,
                         lv_vg_lite_path_t * lv_vg_path,
-                        const lv_vector_path_ctx_t * ctx,
-                        vg_lite_matrix_t * matrix,
-                        const lv_opa_t opa)
+                        const lv_vector_draw_dsc_t * dsc,
+                        vg_lite_matrix_t * matrix)
 {
     LV_PROFILER_DRAW_BEGIN;
 
     vg_lite_path_t * vg_path = lv_vg_lite_path_get_path(lv_vg_path);
 
     LV_UNUSED(path);
-    lv_cache_entry_t * stroke_cache_entey = lv_vg_lite_stroke_get(u, lv_vg_path, &ctx->stroke_dsc);
+    lv_cache_entry_t * stroke_cache_entey = lv_vg_lite_stroke_get(u, lv_vg_path, &dsc->stroke_dsc);
     if(!stroke_cache_entey) {
         LV_LOG_ERROR("convert stroke failed");
         LV_PROFILER_DRAW_END;
@@ -229,16 +208,16 @@ static void draw_stroke(lv_draw_vg_lite_unit_t * u,
 
     /* set stroke params */
     vg_stroke_path->quality = vg_path->quality;
-    vg_stroke_path->stroke_color = lv_color32_to_vg(ctx->stroke_dsc.color, OPA_MIX(ctx->stroke_dsc.opa, opa));
+    vg_stroke_path->stroke_color = lv_color32_to_vg(dsc->stroke_dsc.color, dsc->stroke_dsc.opa);
     const vg_lite_color_t vg_color = 0;
 
     /* set stroke path bounding box */
     lv_memcpy(vg_stroke_path->bounding_box, vg_path->bounding_box, sizeof(vg_path->bounding_box));
     LV_VG_LITE_ASSERT_PATH(vg_stroke_path);
 
-    const vg_lite_blend_t blend = lv_blend_to_vg(ctx->blend_mode);
+    const vg_lite_blend_t blend = lv_blend_to_vg(dsc->blend_mode);
 
-    switch(ctx->stroke_dsc.style) {
+    switch(dsc->stroke_dsc.style) {
         case LV_VECTOR_DRAW_STYLE_SOLID: {
                 /* normal draw shape */
                 lv_vg_lite_draw(
@@ -251,7 +230,7 @@ static void draw_stroke(lv_draw_vg_lite_unit_t * u,
             }
             break;
         default:
-            LV_LOG_WARN("unsupported style: %d", ctx->stroke_dsc.style);
+            LV_LOG_WARN("unsupported style: %d", dsc->stroke_dsc.style);
             break;
     }
 
@@ -259,27 +238,36 @@ static void draw_stroke(lv_draw_vg_lite_unit_t * u,
     LV_PROFILER_DRAW_END;
 }
 
-static void task_draw_cb(void * user_data, const lv_vector_path_t * path, const lv_vector_path_ctx_t * ctx)
+static void task_draw_cb(void * ctx, const lv_vector_path_t * path, const lv_vector_draw_dsc_t * dsc)
 {
     LV_PROFILER_DRAW_BEGIN;
-    lv_draw_vg_lite_unit_t * u = user_data;
+    lv_draw_vg_lite_unit_t * u = ctx;
     LV_VG_LITE_ASSERT_DEST_BUFFER(&u->target_buffer);
 
     vg_lite_matrix_t matrix = u->global_matrix;
 
     const lv_area_t scissor_area = lv_matrix_is_identity((lv_matrix_t *)&matrix)
-                                   ? ctx->scissor_area
-                                   : lv_matrix_transform_area((lv_matrix_t *)&matrix, &ctx->scissor_area);
+                                   ? dsc->scissor_area
+                                   : lv_matrix_transform_area((lv_matrix_t *)&matrix, &dsc->scissor_area);
 
     /* clear area */
     if(!path) {
-        vg_lite_color_t c = lv_color32_to_vg(ctx->fill_dsc.color, OPA_MIX(ctx->fill_dsc.opa, u->task_act->opa));
-        lv_vg_lite_clear(&u->target_buffer, &scissor_area, c);
+        /* clear color needs to ignore fill_dsc.opa */
+        vg_lite_color_t c = lv_color32_to_vg(dsc->fill_dsc.color, dsc->fill_dsc.opa);
+        vg_lite_rectangle_t rect;
+        lv_vg_lite_rect(&rect, &scissor_area);
+        LV_PROFILER_DRAW_BEGIN_TAG("vg_lite_clear");
+        LV_VG_LITE_CHECK_ERROR(vg_lite_clear(&u->target_buffer, &rect, c), {
+            lv_vg_lite_buffer_dump_info(&u->target_buffer);
+            LV_LOG_ERROR("rect: X%d Y%d W%d H%d", rect.x, rect.y, rect.width, rect.height);
+            lv_vg_lite_color_dump_info(c);
+        });
+        LV_PROFILER_DRAW_END_TAG("vg_lite_clear");
         LV_PROFILER_DRAW_END;
         return;
     }
 
-    if(ctx->fill_dsc.opa == LV_OPA_TRANSP && ctx->stroke_dsc.opa == LV_OPA_TRANSP) {
+    if(dsc->fill_dsc.opa == LV_OPA_TRANSP && dsc->stroke_dsc.opa == LV_OPA_TRANSP) {
         LV_LOG_TRACE("Full transparent, no need to draw");
         LV_PROFILER_DRAW_END;
         return;
@@ -287,7 +275,7 @@ static void task_draw_cb(void * user_data, const lv_vector_path_t * path, const 
 
     /* transform matrix */
     vg_lite_matrix_t dsc_matrix;
-    lv_vg_lite_matrix(&dsc_matrix, &ctx->matrix);
+    lv_vg_lite_matrix(&dsc_matrix, &dsc->matrix);
     lv_vg_lite_matrix_multiply(&matrix, &dsc_matrix);
     LV_VG_LITE_ASSERT_MATRIX(&matrix);
 
@@ -295,11 +283,11 @@ static void task_draw_cb(void * user_data, const lv_vector_path_t * path, const 
     lv_vg_lite_path_t * lv_vg_path = lv_vg_lite_path_get(u, VG_LITE_FP32);
 
     lv_fpoint_t offset = {0, 0};
-    lv_path_to_vg(lv_vg_path, path, &offset, ctx->stroke_dsc.opa ? ctx->stroke_dsc.width : 0);
+    lv_path_to_vg(lv_vg_path, path, &offset, dsc->stroke_dsc.opa ? dsc->stroke_dsc.width : 0);
 
     if(vg_lite_query_feature(gcFEATURE_BIT_VG_SCISSOR)) {
         /* set scissor area */
-        lv_vg_lite_set_scissor_area(u, &scissor_area);
+        lv_vg_lite_set_scissor_area(&scissor_area);
         LV_LOG_TRACE("Set scissor area: X1:%" LV_PRId32 ", Y1:%" LV_PRId32 ", X2:%" LV_PRId32 ", Y2:%" LV_PRId32,
                      scissor_area.x1, scissor_area.y1, scissor_area.x2, scissor_area.y2);
     }
@@ -314,22 +302,23 @@ static void task_draw_cb(void * user_data, const lv_vector_path_t * path, const 
             return;
         }
 
-        /**
-         * Use lv_matrix to uniformly handle clipping region transformations,
-         * and obtain the transformed bounding rectangle.
-         */
-        const lv_area_t bounding_box_area = lv_matrix_transform_area((lv_matrix_t *)&result, &scissor_area);
-        lv_vg_lite_path_set_bounding_box_area(lv_vg_path, &bounding_box_area);
+        /* Reverse the clip area on the source */
+        lv_point_precise_t p1 = { scissor_area.x1, scissor_area.y1 };
+        lv_point_precise_t p1_res = lv_vg_lite_matrix_transform_point(&result, &p1);
+
+        /* vg-lite bounding_box will crop the pixels on the edge, so +1px is needed here */
+        lv_point_precise_t p2 = { scissor_area.x2 + 1, scissor_area.y2 + 1 };
+        lv_point_precise_t p2_res = lv_vg_lite_matrix_transform_point(&result, &p2);
+
+        lv_vg_lite_path_set_bounding_box(lv_vg_path, p1_res.x, p1_res.y, p2_res.x, p2_res.y);
     }
 
-    const lv_opa_t layer_opa = u->task_act->opa;
-
-    if(ctx->fill_dsc.opa) {
-        draw_fill(u, lv_vg_path, ctx, &matrix, &offset, layer_opa);
+    if(dsc->fill_dsc.opa) {
+        draw_fill(u, lv_vg_path, dsc, &matrix, &offset);
     }
 
-    if(ctx->stroke_dsc.opa) {
-        draw_stroke(u, path, lv_vg_path, ctx, &matrix, layer_opa);
+    if(dsc->stroke_dsc.opa) {
+        draw_stroke(u, path, lv_vg_path, dsc, &matrix);
     }
 
     /* drop path */
@@ -363,8 +352,8 @@ static void lv_path_to_vg(lv_vg_lite_path_t * dest, const lv_vector_path_t * src
 
     float min_x = FLT_MAX;
     float min_y = FLT_MAX;
-    float max_x = -FLT_MAX;
-    float max_y = -FLT_MAX;
+    float max_x = FLT_MIN;
+    float max_y = FLT_MIN;
 
 #define CMP_BOUNDS(point)                           \
     do {                                            \

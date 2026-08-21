@@ -1,5 +1,5 @@
 /**
- * @file lv_draw_nema_gfx_stm32_hal.c
+ * @file lv_draw_nema_gfx_hal.c
  *
  * Global functions that implement some HAL functionality
  * which Nema will call directly.
@@ -14,17 +14,19 @@
 
 #if LV_USE_NEMA_HAL == LV_NEMA_HAL_STM32
 
-#include "lv_draw_nema_gfx_utils.h"
-
 #include "../../misc/lv_types.h"
 #include "../../misc/lv_assert.h"
 #include "../../stdlib/lv_string.h"
-#include "../../osal/lv_os_private.h"
+
+#include <nema_sys_defs.h>
+#include <nema_core.h>
 
 #include <assert.h>
 #include <string.h>
 
 #include LV_NEMA_STM32_HAL_INCLUDE
+
+#include "tsi_malloc.h"
 
 extern GPU2D_HandleTypeDef hgpu2d;
 
@@ -60,11 +62,10 @@ extern GPU2D_HandleTypeDef hgpu2d;
  *  STATIC VARIABLES
  **********************/
 
-static uint8_t nemagfx_pool_mem[NEMAGFX_MEM_POOL_SIZE] LV_NEMA_STM32_HAL_ATTRIBUTE_POOL_MEM; /* NemaGFX memory pool */
+static uint8_t nemagfx_pool_mem[NEMAGFX_MEM_POOL_SIZE]; /* NemaGFX memory pool */
 
 static nema_ringbuffer_t ring_buffer_str;
 static volatile int last_cl_id = -1;
-static lv_thread_sync_t sync;
 
 /**********************
  *      MACROS
@@ -83,14 +84,11 @@ static lv_thread_sync_t sync;
     LV_UNUSED(hgpu2d);
 
     last_cl_id = CmdListID;
-    lv_thread_sync_signal_isr(&sync);
 }
 
 int32_t nema_sys_init(void)
 {
     int error_code = 0;
-
-    lv_thread_sync_init(&sync);
 
     /* Setup GPU2D Callback */
 #if (USE_HAL_GPU2D_REGISTER_CALLBACKS == 1)
@@ -134,7 +132,6 @@ void nema_reg_write(uint32_t reg, uint32_t value)
 
 int nema_wait_irq(void)
 {
-    lv_thread_sync_wait(&sync);
     return 0;
 }
 

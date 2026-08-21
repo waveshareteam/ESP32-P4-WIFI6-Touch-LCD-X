@@ -53,9 +53,10 @@ artifact 保留 14 天。这些文件是源码示例构建产物，不是出厂�
 
 [Arduino 示例工作流](https://github.com/waveshareteam/ESP32-P4-WIFI6-Touch-LCD-X/actions/workflows/arduino-examples.yml)
 是独立的 30 行编译矩阵：10 个示例分别面向 LCD-7、LCD-8 和 LCD-10.1，使用 Arduino CLI
-`1.5.1`、Arduino-ESP32 `3.3.11` 和 `postv3` Rev3.x 板级配置。只有 `04_LVGLV9`
-使用随仓库提供的 LVGL `9.5.0` 配置。该工作流不生成 Actions artifact、发布镜像或出厂固件。编译成功
-不等于硬件测试；`05_WiFiAnalyzer` 在开发板上运行还需要 ESP32-C6 中兼容的 Hosted
-固件。示例清单、板级选项和硬件验证边界请参阅
-[Arduino 示例说明](../examples/arduino/README_ZH.md)。CI 使用与 Arduino IDE 用户
-相同的自包含 `examples/arduino/libraries` 目录，构建期间不下载 Arduino 库。
+`1.5.1`、Arduino-ESP32 `3.3.11` 和 `postv3` Rev3.x 板级配置。它使用与 LCD-5 一致的
+自包含 `GFX_Library_for_Arduino`、`displays`、LVGL `9.3.0` 和 `lv_conf.h` 库树；
+`04_LVGLV9_Arduino` 使用 LVGL。该工作流不生成 Actions artifact、发布镜像或出厂固件。
+编译成功不等于硬件测试；`05_GFX_ESPWiFiAnalyzer` 在开发板上运行还需要 ESP32-C6 中兼容的
+Hosted 固件。示例清单、板级选项和硬件验证边界请参阅
+[Arduino 示例说明](../examples/arduino/README_ZH.md)。CI 使用与 Arduino IDE 用户相同的
+自包含 `examples/arduino/libraries` 目录，构建期间不下载 Arduino 库。
