@@ -36,14 +36,14 @@ idf.py -B build-lcd-8-v5.5.5-rev3_x -D SDKCONFIG="$PWD/build-lcd-8-v5.5.5-rev3_x
 idf.py -B build-lcd-10-1-v5.5.5-rev3_x -D SDKCONFIG="$PWD/build-lcd-10-1-v5.5.5-rev3_x/sdkconfig" -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.rev3_x;sdkconfig.defaults.lcd-10-1" build
 ```
 
-The application binary is named `esp32-p4-lcd-x-brookesia.bin`. The checked-in Rev3.x merged images follow the LCD-5 factory naming convention: `ESP32-P4-WIFI6-Touch-LCD-7-FactoryOnly-260820.bin`, `ESP32-P4-WIFI6-Touch-LCD-8-FactoryOnly-260820.bin`, and `ESP32-P4-WIFI6-Touch-LCD-10.1-FactoryOnly-260820.bin`.
+The application binary is named `esp32-p4-lcd-x-brookesia.bin`. The checked-in Rev3.x merged images follow the LCD-5 factory naming convention: `ESP32-P4-WIFI6-Touch-LCD-7-FactoryOnly-260915.bin`, `ESP32-P4-WIFI6-Touch-LCD-8-FactoryOnly-260820.bin`, and `ESP32-P4-WIFI6-Touch-LCD-10.1-FactoryOnly-260820.bin`.
 
 ## Merge factory images
 
 Run the matching command after a successful build. Each command creates a 16 MiB image that is ready to flash at offset `0x0`:
 
 ```bash
-(cd build-lcd-7-v5.5.5-rev3_x && python -m esptool --chip esp32p4 merge_bin -o ../../ESP32-P4-WIFI6-Touch-LCD-7-FactoryOnly-260820.bin @flash_args)
+(cd build-lcd-7-v5.5.5-rev3_x && python -m esptool --chip esp32p4 merge_bin -o ../../ESP32-P4-WIFI6-Touch-LCD-7-FactoryOnly-260915.bin @flash_args)
 (cd build-lcd-8-v5.5.5-rev3_x && python -m esptool --chip esp32p4 merge_bin -o ../../ESP32-P4-WIFI6-Touch-LCD-8-FactoryOnly-260820.bin @flash_args)
 (cd build-lcd-10-1-v5.5.5-rev3_x && python -m esptool --chip esp32p4 merge_bin -o ../../ESP32-P4-WIFI6-Touch-LCD-10.1-FactoryOnly-260820.bin @flash_args)
 ```
