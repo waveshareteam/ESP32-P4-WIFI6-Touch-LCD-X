@@ -35,14 +35,14 @@ idf.py -B build-lcd-8-v5.5.5-rev3_x -D SDKCONFIG="$PWD/build-lcd-8-v5.5.5-rev3_x
 idf.py -B build-lcd-10-1-v5.5.5-rev3_x -D SDKCONFIG="$PWD/build-lcd-10-1-v5.5.5-rev3_x/sdkconfig" -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.rev3_x;sdkconfig.defaults.lcd-10-1" build
 ```
 
-应用二进制命名为 `esp32-p4-lcd-x-brookesia.bin`。仓库中的 Rev3.x 合并固件沿用 LCD-5 的出厂命名方式：`ESP32-P4-WIFI6-Touch-LCD-7-FactoryOnly-260820.bin`、`ESP32-P4-WIFI6-Touch-LCD-8-FactoryOnly-260820.bin` 和 `ESP32-P4-WIFI6-Touch-LCD-10.1-FactoryOnly-260820.bin`。
+应用二进制命名为 `esp32-p4-lcd-x-brookesia.bin`。仓库中的 Rev3.x 合并固件沿用 LCD-5 的出厂命名方式：`ESP32-P4-WIFI6-Touch-LCD-7-FactoryOnly-260915.bin`、`ESP32-P4-WIFI6-Touch-LCD-8-FactoryOnly-260820.bin` 和 `ESP32-P4-WIFI6-Touch-LCD-10.1-FactoryOnly-260820.bin`。
 
 ## 合并出厂固件
 
 编译成功后运行对应命令。每条命令会生成一份 16 MiB 合并镜像，可从偏移 `0x0` 开始烧录：
 
 ```bash
-(cd build-lcd-7-v5.5.5-rev3_x && python -m esptool --chip esp32p4 merge_bin -o ../../ESP32-P4-WIFI6-Touch-LCD-7-FactoryOnly-260820.bin @flash_args)
+(cd build-lcd-7-v5.5.5-rev3_x && python -m esptool --chip esp32p4 merge_bin -o ../../ESP32-P4-WIFI6-Touch-LCD-7-FactoryOnly-260915.bin @flash_args)
 (cd build-lcd-8-v5.5.5-rev3_x && python -m esptool --chip esp32p4 merge_bin -o ../../ESP32-P4-WIFI6-Touch-LCD-8-FactoryOnly-260820.bin @flash_args)
 (cd build-lcd-10-1-v5.5.5-rev3_x && python -m esptool --chip esp32p4 merge_bin -o ../../ESP32-P4-WIFI6-Touch-LCD-10.1-FactoryOnly-260820.bin @flash_args)
 ```
