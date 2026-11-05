@@ -94,12 +94,16 @@ access to the ESP Component Registry is required. Use a data-capable USB cable
 for flashing.
 
 All commands below run from this directory. Starting from the repository root,
-first generate the board code for your panel, then build. `-a` takes the amend
-name and resolves it inside the board directory:
+first generate the board code for your panel, then build. On a fresh checkout,
+run `idf.py reconfigure` once so the Waveshare board definitions are downloaded
+before `idf.py bmgr` looks for the board. `-a` takes the amend name and resolves
+it inside the board directory:
 
 ```sh
 cd firmware/brookesia
 idf.py --version
+python -m pip install --upgrade esp-bmgr-assist
+idf.py reconfigure
 
 # 7 inch
 idf.py bmgr -b esp32_p4_wifi6_touch_lcd_x -a lcd_7_dsi_touch_a

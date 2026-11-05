@@ -88,9 +88,13 @@ GT911 的 INT 与 RST 未连接到 SoC。触摸设备依次探测 I2C 地址 `0x
 以下命令都在本目录下运行。从仓库根目录开始，先为所用屏幕生成板级代码，再编译。
 `-a` 直接写 amend 名称，会在板级目录内查找：
 
+全新检出时先运行一次 `idf.py reconfigure`，下载微雪板级定义，`idf.py bmgr` 才能找到这块板。
+
 ```sh
 cd firmware/brookesia
 idf.py --version
+python -m pip install --upgrade esp-bmgr-assist
+idf.py reconfigure
 
 # 7 英寸
 idf.py bmgr -b esp32_p4_wifi6_touch_lcd_x -a lcd_7_dsi_touch_a
