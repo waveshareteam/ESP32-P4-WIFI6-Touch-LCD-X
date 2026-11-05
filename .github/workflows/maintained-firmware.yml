@@ -65,6 +65,8 @@ jobs:
           path: firmware/brookesia
           command: |
             set -euo pipefail
+            python -m pip install --upgrade esp-bmgr-assist
+            export IDF_TARGET=esp32p4
             for variant in lcd-7 lcd-8 lcd-10-1; do
               python ../../.github/scripts/build_esp_idf_artifact.py \
                 --repo-root ../.. \

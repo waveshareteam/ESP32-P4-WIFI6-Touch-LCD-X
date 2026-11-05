@@ -161,9 +161,9 @@ The default ESP-Brookesia firmware source is available under
 [`firmware/brookesia/`](firmware/brookesia/). The Rev3.x merged factory images
 built from that source are:
 
-- `ESP32-P4-WIFI6-Touch-LCD-7-FactoryOnly-260915.bin`
-- `ESP32-P4-WIFI6-Touch-LCD-8-FactoryOnly-260820.bin`
-- `ESP32-P4-WIFI6-Touch-LCD-10.1-FactoryOnly-260820.bin`
+- `ESP32-P4-WIFI6-Touch-LCD-7-FactoryOnly-261105.bin`
+- `ESP32-P4-WIFI6-Touch-LCD-8-FactoryOnly-261105.bin`
+- `ESP32-P4-WIFI6-Touch-LCD-10.1-FactoryOnly-261105.bin`
 
 Use only the image that matches your hardware and ESP32-P4 Rev3.x. Superseded
 fixed-name FactoryOnly images have been removed; only the current dated images

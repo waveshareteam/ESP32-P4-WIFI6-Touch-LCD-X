@@ -199,13 +199,13 @@ python $IDF_PATH/components/partition_table/parttool.py --port PORT --partition-
 ### 出厂固件
 
 应用二进制命名为 `esp32-p4-lcd-x-brookesia.bin`。已发布的合并固件为
-`ESP32-P4-WIFI6-Touch-LCD-7-FactoryOnly-260915.bin`、
-`ESP32-P4-WIFI6-Touch-LCD-8-FactoryOnly-260820.bin` 和
-`ESP32-P4-WIFI6-Touch-LCD-10.1-FactoryOnly-260820.bin`。为某个屏幕编译完成后，
+`ESP32-P4-WIFI6-Touch-LCD-7-FactoryOnly-261105.bin`、
+`ESP32-P4-WIFI6-Touch-LCD-8-FactoryOnly-261105.bin` 和
+`ESP32-P4-WIFI6-Touch-LCD-10.1-FactoryOnly-261105.bin`。为某个屏幕编译完成后，
 可合并出从偏移 `0x0` 烧录的镜像，例如：
 
 ```sh
-(cd build && python -m esptool --chip esp32p4 merge_bin -o ../../ESP32-P4-WIFI6-Touch-LCD-7-FactoryOnly-260915.bin @flash_args)
+(cd build && python -m esptool --chip esp32p4 merge_bin -o ../../ESP32-P4-WIFI6-Touch-LCD-7-FactoryOnly-261105.bin @flash_args)
 ```
 
 ## AIChats / 小智

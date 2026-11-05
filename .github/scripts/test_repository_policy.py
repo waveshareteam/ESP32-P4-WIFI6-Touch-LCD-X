@@ -153,6 +153,8 @@ class RepositoryPolicyTests(unittest.TestCase):
         self.assertNotIn('examples/esp-idf/11_esp_brookesia_phone', workflow)
         command = '''command: |
             set -euo pipefail
+            python -m pip install --upgrade esp-bmgr-assist
+            export IDF_TARGET=esp32p4
             for variant in lcd-7 lcd-8 lcd-10-1; do
               python ../../.github/scripts/build_esp_idf_artifact.py \\
                 --repo-root ../.. \\

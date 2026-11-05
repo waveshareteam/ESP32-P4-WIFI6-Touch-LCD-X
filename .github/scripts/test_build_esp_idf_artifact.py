@@ -170,16 +170,28 @@ class ArtifactTests(unittest.TestCase):
     def test_maintained_firmware_uses_exact_project_defaults_and_rejects_impostors(self) -> None:
         root, project = self.maintained_fixture()
         commands: list[list[str]] = []
+        good_sdkconfig = 'CONFIG_IDF_TARGET="esp32p4"\nCONFIG_ESP_BOARD_NAME="esp32_p4_wifi6_touch_lcd_x"\nCONFIG_PHONE_STYLESHEET_7_INCH=y\nCONFIG_ESP32P4_REV_MIN_300=y\n'
+        sdkconfig_text = good_sdkconfig
 
         def fake_run(command: list[str], cwd: Path) -> None:
             commands.append(command)
-            if command[0] == "idf.py":
-                (project / "sdkconfig.ci-lcd-7").write_text('CONFIG_IDF_TARGET="esp32p4"\nCONFIG_BSP_LCD_TYPE_720_1280_7_INCH=y\nCONFIG_ESP32P4_REV_MIN_300=y\n', encoding="utf-8")
+            if "bmgr" in command:
+                defaults = project / artifact.MAINTAINED_FIRMWARE_BOARD_DEFAULTS
+                defaults.parent.mkdir(parents=True, exist_ok=True)
+                defaults.write_text("CONFIG_ESP_BOARD_DEV_DISPLAY_LCD_SUPPORT=y\n", encoding="utf-8")
+            else:
+                (project / "sdkconfig.ci-lcd-7").write_text(sdkconfig_text, encoding="utf-8")
 
         args = ["--repo-root", str(root), "--idf-version", "v5.5.5", "--display-variant", "lcd-7", "--revision-profile", "rev3_x", "--build-dir", "build/ci-lcd-7", "--sdkconfig", "sdkconfig.ci-lcd-7", "--package-artifact", "false", "--artifact-kind", "maintained-product-firmware", "--expected-checkout-sha", "head-sha"]
         with mock.patch.object(artifact.Path, "cwd", return_value=project), mock.patch.object(artifact, "run", side_effect=fake_run), mock.patch.object(artifact, "verified_git_sha", return_value="head-sha"):
             self.assertEqual(artifact.main(args), 0)
-        self.assertIn("sdkconfig.defaults;sdkconfig.defaults.lcd-7", commands[0][4])
+        self.assertEqual(commands[0][3:], ["bmgr", "-b", "esp32_p4_wifi6_touch_lcd_x", "-a", "lcd_7_dsi_touch_a"])
+        self.assertIn("sdkconfig.defaults;components/gen_bmgr_codes/board_manager.defaults;sdkconfig.defaults.lcd-7", commands[1][4])
+
+        for sdkconfig_text in (good_sdkconfig.replace("STYLESHEET_7_INCH", "STYLESHEET_8_INCH"), good_sdkconfig.replace('CONFIG_ESP_BOARD_NAME="esp32_p4_wifi6_touch_lcd_x"\n', "")):
+            with mock.patch.object(artifact.Path, "cwd", return_value=project), mock.patch.object(artifact, "run", side_effect=fake_run), mock.patch.object(artifact, "verified_git_sha", return_value="head-sha"):
+                with self.assertRaises(artifact.ArtifactError):
+                    artifact.main(args)
 
         other_root, other_project = self.fixture()
         with mock.patch.object(artifact.Path, "cwd", return_value=other_project):
@@ -190,6 +202,13 @@ class ArtifactTests(unittest.TestCase):
                 artifact.main(args[:2] + ["--idf-version", "v6.0.2", "--display-variant", "lcd-7", "--package-artifact", "false", "--artifact-kind", "maintained-product-firmware", "--expected-checkout-sha", "head-sha"])
             with self.assertRaisesRegex(artifact.ArtifactError, "rev3_x"):
                 artifact.main(args[:2] + ["--idf-version", "v5.5.5", "--display-variant", "lcd-7", "--revision-profile", "rev1_3", "--package-artifact", "false", "--artifact-kind", "maintained-product-firmware", "--expected-checkout-sha", "head-sha"])
+
+    def test_board_manager_command_selects_each_panel(self) -> None:
+        build_dir = Path("build")
+        self.assertEqual(artifact.board_manager_command(build_dir, "lcd_8_dsi_touch_a")[-2:], ["-a", "lcd_8_dsi_touch_a"])
+        self.assertNotIn("-a", artifact.board_manager_command(build_dir, artifact.maintained_firmware_panel("lcd-10-1")["amend"]))
+        with self.assertRaisesRegex(artifact.ArtifactError, "no panel"):
+            artifact.maintained_firmware_panel("shared")
 
     def test_git_head_is_authoritative_and_mismatch_fails(self) -> None:
         root, _ = self.fixture()

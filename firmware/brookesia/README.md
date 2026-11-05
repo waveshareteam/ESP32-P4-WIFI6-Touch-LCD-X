@@ -216,13 +216,13 @@ python $IDF_PATH/components/partition_table/parttool.py --port PORT --partition-
 ### Factory images
 
 The application binary is named `esp32-p4-lcd-x-brookesia.bin`. The released
-merged images are `ESP32-P4-WIFI6-Touch-LCD-7-FactoryOnly-260915.bin`,
-`ESP32-P4-WIFI6-Touch-LCD-8-FactoryOnly-260820.bin` and
-`ESP32-P4-WIFI6-Touch-LCD-10.1-FactoryOnly-260820.bin`. After building for a
+merged images are `ESP32-P4-WIFI6-Touch-LCD-7-FactoryOnly-261105.bin`,
+`ESP32-P4-WIFI6-Touch-LCD-8-FactoryOnly-261105.bin` and
+`ESP32-P4-WIFI6-Touch-LCD-10.1-FactoryOnly-261105.bin`. After building for a
 panel, merge an image that flashes at offset `0x0`, for example:
 
 ```sh
-(cd build && python -m esptool --chip esp32p4 merge_bin -o ../../ESP32-P4-WIFI6-Touch-LCD-7-FactoryOnly-260915.bin @flash_args)
+(cd build && python -m esptool --chip esp32p4 merge_bin -o ../../ESP32-P4-WIFI6-Touch-LCD-7-FactoryOnly-261105.bin @flash_args)
 ```
 
 ## AIChats / Xiaozhi
