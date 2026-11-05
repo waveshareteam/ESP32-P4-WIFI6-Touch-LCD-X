@@ -2,6 +2,9 @@ dependencies:
   idf: ">=5.4"
 
   waveshare/esp32_p4_wifi6_touch_lcd_x: "^2.0.3"
+  lvgl/lvgl:
+    # esp_lvgl_adapter 0.6 fails against LVGL 9.6 on ESP-IDF v6.
+    version: "9.5.0"
 
   espressif/esp_audio_codec:
     # Keep the CI-validated 2.5.x API contract. Re-evaluate later releases
