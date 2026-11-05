@@ -53,7 +53,6 @@ class ArtifactTests(unittest.TestCase):
         (project / "build" / "bootloader").mkdir(parents=True)
         (root / "config").mkdir(parents=True)
         (project / "sdkconfig.defaults").write_text("CONFIG_DEFAULT=y\n", encoding="utf-8")
-        (project / "sdkconfig.defaults.rev3_x").write_text("CONFIG_ESP32P4_REV_MIN_300=y\n", encoding="utf-8")
         for variant in ("lcd-7", "lcd-8", "lcd-10-1"):
             (project / f"sdkconfig.defaults.{variant}").write_text("CONFIG_VARIANT=y\n", encoding="utf-8")
         (root / "config" / "display-variants.json").write_text(json.dumps({"display_examples": ["examples/esp-idf/demo"], "variants": [VARIANT]}), encoding="utf-8")
@@ -180,7 +179,7 @@ class ArtifactTests(unittest.TestCase):
         args = ["--repo-root", str(root), "--idf-version", "v5.5.5", "--display-variant", "lcd-7", "--revision-profile", "rev3_x", "--build-dir", "build/ci-lcd-7", "--sdkconfig", "sdkconfig.ci-lcd-7", "--package-artifact", "false", "--artifact-kind", "maintained-product-firmware", "--expected-checkout-sha", "head-sha"]
         with mock.patch.object(artifact.Path, "cwd", return_value=project), mock.patch.object(artifact, "run", side_effect=fake_run), mock.patch.object(artifact, "verified_git_sha", return_value="head-sha"):
             self.assertEqual(artifact.main(args), 0)
-        self.assertIn("sdkconfig.defaults;sdkconfig.defaults.rev3_x;sdkconfig.defaults.lcd-7", commands[0][4])
+        self.assertIn("sdkconfig.defaults;sdkconfig.defaults.lcd-7", commands[0][4])
 
         other_root, other_project = self.fixture()
         with mock.patch.object(artifact.Path, "cwd", return_value=other_project):

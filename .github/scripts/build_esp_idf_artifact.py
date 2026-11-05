@@ -84,7 +84,7 @@ def relative_defaults(project: Path, repo_root: Path, sdkconfig_ci: str, variant
 def maintained_firmware_defaults(project: Path, display_variant: str, revision_profile: str) -> list[str]:
     if revision_profile != "rev3_x":
         raise ArtifactError("maintained firmware only supports rev3_x")
-    defaults = ["sdkconfig.defaults", "sdkconfig.defaults.rev3_x", f"sdkconfig.defaults.{display_variant}"]
+    defaults = ["sdkconfig.defaults", f"sdkconfig.defaults.{display_variant}"]
     for name in defaults:
         if not (project / name).is_file():
             raise ArtifactError(f"maintained firmware defaults are missing: {project / name}")
