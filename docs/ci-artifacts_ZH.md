@@ -49,7 +49,7 @@ artifact 保留 14 天。这些文件是源码示例构建产物，不是出厂�
 固定 32 MiB 闪存容量、配置与范围、数值分段偏移、文件大小、SHA-256 和独立的
 合并镜像元数据。发布名称使用准确 checkout SHA12。编译成功不等于硬件验证。
 
-`firmware/brookesia` 是维护中的产品固件源码。专用 ESP-IDF v5.5.5 工作流为 lcd-7、lcd-8 和 lcd-10.1 分别构建一个 Rev3.x 产物，共三个。由于该精确提交的 CI 不发布 Rev1.3 产物，Windows 助手会拒绝 Rev1.3 硬件。带日期的 FactoryOnly BIN 是独立且不可变的交付文件，不由 CI 重新生成。`11_esp_brookesia_phone` 仍由常规示例矩阵覆盖。
+`firmware/brookesia` 是维护中的产品固件源码。专用 ESP-IDF v5.5.5 工作流为 lcd-7、lcd-8 和 lcd-10.1 分别构建一个 Rev3.x 产物，共三个，每个屏幕编译前先运行 `idf.py bmgr`。由于该精确提交的 CI 不发布 Rev1.3 产物，Windows 助手会拒绝 Rev1.3 硬件。带日期的 FactoryOnly BIN 是独立且不可变的交付文件，不由 CI 重新生成。`11_esp_brookesia_phone` 仍由常规示例矩阵覆盖。
 
 [Arduino 示例工作流](https://github.com/waveshareteam/ESP32-P4-WIFI6-Touch-LCD-X/actions/workflows/arduino-examples.yml)
 是独立的 30 行编译矩阵：10 个示例分别面向 LCD-7、LCD-8 和 LCD-10.1，使用 Arduino CLI

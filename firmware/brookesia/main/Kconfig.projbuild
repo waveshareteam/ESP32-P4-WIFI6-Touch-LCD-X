@@ -1,0 +1,20 @@
+menu "Phone UI"
+
+    choice PHONE_STYLESHEET
+        prompt "Phone stylesheet"
+        default PHONE_STYLESHEET_10_INCH
+        help
+            Select the landscape stylesheet for the panel. The
+            sdkconfig.defaults.lcd-* files select this for each panel.
+
+        config PHONE_STYLESHEET_7_INCH
+            bool "7 inch"
+
+        config PHONE_STYLESHEET_8_INCH
+            bool "8 inch"
+
+        config PHONE_STYLESHEET_10_INCH
+            bool "10.1 inch"
+    endchoice
+
+endmenu

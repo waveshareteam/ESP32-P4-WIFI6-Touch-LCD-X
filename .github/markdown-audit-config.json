@@ -3,6 +3,10 @@
     {
       "category": "embedded_upstream",
       "patterns": ["examples/esp-idf/10_mp4_player/components/esp_extractor/**"]
+    },
+    {
+      "category": "first_party_maintainer",
+      "patterns": ["firmware/brookesia/components/Camera/config/*.md"]
     }
   ],
   "exclude_patterns": [

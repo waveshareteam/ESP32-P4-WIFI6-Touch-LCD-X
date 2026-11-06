@@ -39,6 +39,14 @@ REVISION_PROFILES = {
 }
 MAINTAINED_FIRMWARE_PATH = Path("firmware/brookesia")
 MAINTAINED_FIRMWARE_IDF_VERSION = "v5.5.5"
+MAINTAINED_FIRMWARE_BOARD = "esp32_p4_wifi6_touch_lcd_x"
+MAINTAINED_FIRMWARE_BOARD_DEFAULTS = "components/gen_bmgr_codes/board_manager.defaults"
+MAINTAINED_FIRMWARE_PANELS = {
+    "lcd-7": {"amend": "lcd_7_dsi_touch_a", "stylesheet": "CONFIG_PHONE_STYLESHEET_7_INCH"},
+    "lcd-8": {"amend": "lcd_8_dsi_touch_a", "stylesheet": "CONFIG_PHONE_STYLESHEET_8_INCH"},
+    "lcd-10-1": {"amend": "", "stylesheet": "CONFIG_PHONE_STYLESHEET_10_INCH"},
+}
+PHONE_STYLESHEET_SYMBOLS = tuple(panel["stylesheet"] for panel in MAINTAINED_FIRMWARE_PANELS.values())
 
 
 class ArtifactError(RuntimeError):
@@ -84,18 +92,38 @@ def relative_defaults(project: Path, repo_root: Path, sdkconfig_ci: str, variant
 def maintained_firmware_defaults(project: Path, display_variant: str, revision_profile: str) -> list[str]:
     if revision_profile != "rev3_x":
         raise ArtifactError("maintained firmware only supports rev3_x")
-    defaults = ["sdkconfig.defaults", "sdkconfig.defaults.rev3_x", f"sdkconfig.defaults.{display_variant}"]
+    defaults = ["sdkconfig.defaults", MAINTAINED_FIRMWARE_BOARD_DEFAULTS, f"sdkconfig.defaults.{display_variant}"]
     for name in defaults:
         if not (project / name).is_file():
             raise ArtifactError(f"maintained firmware defaults are missing: {project / name}")
     return defaults
 
 
+def maintained_firmware_panel(display_variant: str) -> dict[str, str]:
+    panel = MAINTAINED_FIRMWARE_PANELS.get(display_variant)
+    if panel is None:
+        raise ArtifactError(f"maintained firmware has no panel for display variant: {display_variant}")
+    return panel
+
+
+def board_manager_command(build_dir: Path, amend: str) -> list[str]:
+    command = ["idf.py", "-B", str(build_dir), "bmgr", "-b", MAINTAINED_FIRMWARE_BOARD]
+    if amend:
+        command += ["-a", amend]
+    return command
+
+
 def is_maintained_firmware_project(project: Path, repo_root: Path) -> bool:
     return project == (repo_root / MAINTAINED_FIRMWARE_PATH).resolve()
 
 
-def validate_build_config(sdkconfig: Path, expected_symbol: str | None, revision_profile: str) -> None:
+def validate_build_config(
+    sdkconfig: Path,
+    expected_symbol: str | None,
+    revision_profile: str,
+    symbols: tuple[str, ...] = LCD_SYMBOLS,
+    board: str | None = None,
+) -> None:
     if not sdkconfig.is_file():
         raise ArtifactError(f"generated sdkconfig is missing: {sdkconfig}")
     values = dict(
@@ -103,9 +131,11 @@ def validate_build_config(sdkconfig: Path, expected_symbol: str | None, revision
         for line in sdkconfig.read_text(encoding="utf-8").splitlines()
         if line.startswith("CONFIG_") and "=" in line
     )
-    enabled = [symbol for symbol in LCD_SYMBOLS if values.get(symbol) == "y"]
+    enabled = [symbol for symbol in symbols if values.get(symbol) == "y"]
     if expected_symbol is not None and enabled != [expected_symbol]:
         raise ArtifactError(f"LCD variant mismatch: expected {expected_symbol}=y, got {enabled or 'no enabled LCD type'}")
+    if board is not None and values.get("CONFIG_ESP_BOARD_NAME") != f'"{board}"':
+        raise ArtifactError(f"generated sdkconfig does not select board {board}")
     if values.get("CONFIG_IDF_TARGET") != '"esp32p4"':
         raise ArtifactError("generated sdkconfig target is not esp32p4")
     profile = REVISION_PROFILES.get(revision_profile)
@@ -326,13 +356,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.package_artifact == "true" and not variant:
         raise ArtifactError("only display variants may package artifacts")
     actual_sha = verified_git_sha(repo_root, args.expected_checkout_sha)
-    defaults = (
-        maintained_firmware_defaults(project, args.display_variant, args.revision_profile)
-        if maintained_project and args.artifact_kind == "maintained-product-firmware"
-        else relative_defaults(project, repo_root, args.sdkconfig_ci, args.variant_defaults, args.revision_profile)
-    )
     build_dir = (project / args.build_dir).resolve()
     sdkconfig = (project / args.sdkconfig).resolve()
+    maintained_build = maintained_project and args.artifact_kind == "maintained-product-firmware"
+    panel = maintained_firmware_panel(args.display_variant) if maintained_build else None
+    if panel is not None:
+        # gen_bmgr_codes is not committed and holds one panel at a time.
+        run(board_manager_command(build_dir, panel["amend"]), project)
+    defaults = (
+        maintained_firmware_defaults(project, args.display_variant, args.revision_profile)
+        if maintained_build
+        else relative_defaults(project, repo_root, args.sdkconfig_ci, args.variant_defaults, args.revision_profile)
+    )
     command = ["idf.py", "-B", str(build_dir), f"-DSDKCONFIG={sdkconfig}"]
     if defaults:
         command.append(f"-DSDKCONFIG_DEFAULTS={';'.join(defaults)}")
@@ -341,7 +376,10 @@ def main(argv: list[str] | None = None) -> int:
     if variant and not maintained_project:
         if args.variant_defaults != variant["overlay"]:
             raise ArtifactError("matrix overlay does not match display variant metadata")
-    validate_build_config(sdkconfig, variant.get("kconfig"), args.revision_profile)
+    if panel is not None:
+        validate_build_config(sdkconfig, panel["stylesheet"], args.revision_profile, PHONE_STYLESHEET_SYMBOLS, MAINTAINED_FIRMWARE_BOARD)
+    else:
+        validate_build_config(sdkconfig, variant.get("kconfig"), args.revision_profile)
     if args.package_artifact == "true":
         print(package_artifact(repo_root, project, args.idf_version, variant, actual_sha, args.revision_profile, build_dir, args.artifact_kind))
     return 0

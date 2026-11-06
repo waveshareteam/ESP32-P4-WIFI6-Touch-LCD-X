@@ -153,6 +153,10 @@ class RepositoryPolicyTests(unittest.TestCase):
         self.assertNotIn('examples/esp-idf/11_esp_brookesia_phone', workflow)
         command = '''command: |
             set -euo pipefail
+            export IDF_TARGET=esp32p4
+            # bmgr alone only fetches esp_board_manager, not waveshare_boards.
+            idf.py -B build/ci-deps "-DSDKCONFIG=$PWD/build/ci-deps/sdkconfig" reconfigure
+            python -m pip install --upgrade esp-bmgr-assist
             for variant in lcd-7 lcd-8 lcd-10-1; do
               python ../../.github/scripts/build_esp_idf_artifact.py \\
                 --repo-root ../.. \\

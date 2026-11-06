@@ -28,11 +28,10 @@ ESP Component Registry 中的托管组件
 ## 固件本地组件
 
 `firmware/brookesia` 是 Rev3.x 出厂固件源码工程，按设计同时保留产品应用、
-`bsp_extra`、经过补丁调整的 `brookesia_core` 与本地 LCD-X BSP。该 BSP 依赖
-已发布的 `espressif/esp_lcd_jd9365 ^2.0.2`，并显式写出 pre-v3/Rev3.x 的
-MIPI PHY 时钟选择。托管 BSP 2.0.3 将 `phy_clk_src` 保持为零，由 ESP-IDF 根据
-构建时选择的芯片修订版得到等价时钟。应将该本地副本继续作为版本化固件源码
-边界，等后续独立固件迁移确认其余本地组合代码可以使用托管 BSP 后再移除。
+经过补丁调整的 `brookesia_core` 与本地 `board` 板级层。ESP Board Manager 通过
+托管组件 `waveshare/waveshare_boards` 中的板级定义描述硬件，`board` 在其上提供
+应用使用的接口，因此固件不再包含本地 LCD-X BSP 和 `bsp_extra`。
+`components/gen_bmgr_codes` 由 `idf.py bmgr` 按屏幕逐一生成，不提交到仓库。
 构建目录、托管组件缓存及包含主机路径的依赖锁文件不属于该源码边界。
 
 ## 维护规则

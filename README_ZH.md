@@ -142,9 +142,9 @@ Markdown 门禁，检查归属、中英文配对与同语言链接、首页对�
 默认 ESP-Brookesia 固件源码位于 [`firmware/brookesia/`](firmware/brookesia/)。
 由该源码编译的 Rev3.x 合并出厂固件为：
 
-- `ESP32-P4-WIFI6-Touch-LCD-7-FactoryOnly-260915.bin`
-- `ESP32-P4-WIFI6-Touch-LCD-8-FactoryOnly-260820.bin`
-- `ESP32-P4-WIFI6-Touch-LCD-10.1-FactoryOnly-260820.bin`
+- `ESP32-P4-WIFI6-Touch-LCD-7-FactoryOnly-261105.bin`
+- `ESP32-P4-WIFI6-Touch-LCD-8-FactoryOnly-261105.bin`
+- `ESP32-P4-WIFI6-Touch-LCD-10.1-FactoryOnly-261105.bin`
 
 请仅使用与实际硬件及 ESP32-P4 Rev3.x 相符的固件。旧的固定名称 FactoryOnly
 固件已移除，仅保留当前带日期的版本。这些文件与源码 CI 构建产物相互独立。
