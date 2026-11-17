@@ -24,7 +24,7 @@ ESP32-C6 Hosted Wi-Fi。
 | 语音助手 | `espressif/esp_xiaozhi` 0.1.3、ESP-SR 2.4.7、xiaozhi-fonts 1.6.0 |
 | 多媒体 | `espressif/esp_extractor` 1.0.7、`esp_new_jpeg` 1.0.2、`esp_video` 2.5.0 |
 
-接口与引脚分配见[仓库 README](../../README_ZH.md)。
+接口与引脚分配见[仓库 README](../../../README_ZH.md)。
 
 ## 板级支持
 
@@ -91,7 +91,7 @@ GT911 的 INT 与 RST 未连接到 SoC。触摸设备依次探测 I2C 地址 `0x
 全新检出时先运行一次 `idf.py reconfigure`，下载微雪板级定义，`idf.py bmgr` 才能找到这块板。
 
 ```sh
-cd firmware/brookesia
+cd examples/factory/brookesia
 idf.py --version
 python -m pip install --upgrade esp-bmgr-assist
 idf.py reconfigure
@@ -203,13 +203,13 @@ python $IDF_PATH/components/partition_table/parttool.py --port PORT --partition-
 ### 出厂固件
 
 应用二进制命名为 `esp32-p4-lcd-x-brookesia.bin`。已发布的合并固件为
-`ESP32-P4-WIFI6-Touch-LCD-7-FactoryOnly-261105.bin`、
-`ESP32-P4-WIFI6-Touch-LCD-8-FactoryOnly-261105.bin` 和
-`ESP32-P4-WIFI6-Touch-LCD-10.1-FactoryOnly-261105.bin`。为某个屏幕编译完成后，
+`ESP32-P4-WIFI6-Touch-LCD-7_FactoryOnly_20261105.bin`、
+`ESP32-P4-WIFI6-Touch-LCD-8_FactoryOnly_20261105.bin` 和
+`ESP32-P4-WIFI6-Touch-LCD-10.1_FactoryOnly_20261105.bin`。为某个屏幕编译完成后，
 可合并出从偏移 `0x0` 烧录的镜像，例如：
 
 ```sh
-(cd build && python -m esptool --chip esp32p4 merge_bin -o ../../ESP32-P4-WIFI6-Touch-LCD-7-FactoryOnly-261105.bin @flash_args)
+(cd build && python -m esptool --chip esp32p4 merge_bin -o ../../../../firmware/ESP32-P4-WIFI6-Touch-LCD-7/ESP32-P4-WIFI6-Touch-LCD-7_FactoryOnly_20261105.bin @flash_args)
 ```
 
 ## AIChats / 小智

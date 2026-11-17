@@ -31,7 +31,7 @@ code and embedded upstream trees remain local.
 
 ## Firmware-Local Components
 
-`firmware/brookesia` is the Rev3.x factory-source project and intentionally
+`examples/factory/brookesia` is the Rev3.x factory-source project and intentionally
 keeps its product applications, patched `brookesia_core`, and a local `board`
 layer together. ESP Board Manager describes the hardware through the managed
 `waveshare/waveshare_boards` definitions, and `board` builds the

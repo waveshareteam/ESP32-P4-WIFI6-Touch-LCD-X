@@ -25,7 +25,7 @@ and ESP32-C6 hosted Wi-Fi.
 | Voice assistant | `espressif/esp_xiaozhi` 0.1.3, ESP-SR 2.4.7 and xiaozhi-fonts 1.6.0 |
 | Media | `espressif/esp_extractor` 1.0.7, `esp_new_jpeg` 1.0.2, `esp_video` 2.5.0 |
 
-See the [repository README](../../README.md) for interfaces and pin assignments.
+See the [repository README](../../../README.md) for interfaces and pin assignments.
 
 ## Board support
 
@@ -100,7 +100,7 @@ before `idf.py bmgr` looks for the board. `-a` takes the amend name and resolves
 it inside the board directory:
 
 ```sh
-cd firmware/brookesia
+cd examples/factory/brookesia
 idf.py --version
 python -m pip install --upgrade esp-bmgr-assist
 idf.py reconfigure
@@ -220,13 +220,13 @@ python $IDF_PATH/components/partition_table/parttool.py --port PORT --partition-
 ### Factory images
 
 The application binary is named `esp32-p4-lcd-x-brookesia.bin`. The released
-merged images are `ESP32-P4-WIFI6-Touch-LCD-7-FactoryOnly-261105.bin`,
-`ESP32-P4-WIFI6-Touch-LCD-8-FactoryOnly-261105.bin` and
-`ESP32-P4-WIFI6-Touch-LCD-10.1-FactoryOnly-261105.bin`. After building for a
+merged images are `ESP32-P4-WIFI6-Touch-LCD-7_FactoryOnly_20261105.bin`,
+`ESP32-P4-WIFI6-Touch-LCD-8_FactoryOnly_20261105.bin` and
+`ESP32-P4-WIFI6-Touch-LCD-10.1_FactoryOnly_20261105.bin`. After building for a
 panel, merge an image that flashes at offset `0x0`, for example:
 
 ```sh
-(cd build && python -m esptool --chip esp32p4 merge_bin -o ../../ESP32-P4-WIFI6-Touch-LCD-7-FactoryOnly-261105.bin @flash_args)
+(cd build && python -m esptool --chip esp32p4 merge_bin -o ../../../../firmware/ESP32-P4-WIFI6-Touch-LCD-7/ESP32-P4-WIFI6-Touch-LCD-7_FactoryOnly_20261105.bin @flash_args)
 ```
 
 ## AIChats / Xiaozhi
