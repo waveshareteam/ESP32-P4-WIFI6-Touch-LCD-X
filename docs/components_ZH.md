@@ -27,7 +27,7 @@ ESP Component Registry 中的托管组件
 
 ## 固件本地组件
 
-`firmware/brookesia` 是 Rev3.x 出厂固件源码工程，按设计同时保留产品应用、
+`examples/factory/brookesia` 是 Rev3.x 出厂固件源码工程，按设计同时保留产品应用、
 经过补丁调整的 `brookesia_core` 与本地 `board` 板级层。ESP Board Manager 通过
 托管组件 `waveshare/waveshare_boards` 中的板级定义描述硬件，`board` 在其上提供
 应用使用的接口，因此固件不再包含本地 LCD-X BSP 和 `bsp_extra`。

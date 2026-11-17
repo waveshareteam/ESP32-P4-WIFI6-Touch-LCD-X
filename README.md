@@ -158,16 +158,15 @@ not been verified and this repository does not add a 720x1280-specific styleshee
 ## 📦 Factory Firmware
 
 The default ESP-Brookesia firmware source is available under
-[`firmware/brookesia/`](firmware/brookesia/). The Rev3.x merged factory images
+[`examples/factory/brookesia/`](examples/factory/brookesia/). The Rev3.x merged factory images
 built from that source are:
 
-- `ESP32-P4-WIFI6-Touch-LCD-7-FactoryOnly-261105.bin`
-- `ESP32-P4-WIFI6-Touch-LCD-8-FactoryOnly-261105.bin`
-- `ESP32-P4-WIFI6-Touch-LCD-10.1-FactoryOnly-261105.bin`
+- [`ESP32-P4-WIFI6-Touch-LCD-7_FactoryOnly_20261105.bin`](firmware/ESP32-P4-WIFI6-Touch-LCD-7/ESP32-P4-WIFI6-Touch-LCD-7_FactoryOnly_20261105.bin)
+- [`ESP32-P4-WIFI6-Touch-LCD-8_FactoryOnly_20261105.bin`](firmware/ESP32-P4-WIFI6-Touch-LCD-8/ESP32-P4-WIFI6-Touch-LCD-8_FactoryOnly_20261105.bin)
+- [`ESP32-P4-WIFI6-Touch-LCD-10.1_FactoryOnly_20261105.bin`](firmware/ESP32-P4-WIFI6-Touch-LCD-10.1/ESP32-P4-WIFI6-Touch-LCD-10.1_FactoryOnly_20261105.bin)
 
 Use only the image that matches your hardware and ESP32-P4 Rev3.x. Superseded
-fixed-name FactoryOnly images have been removed; only the current dated images
-are kept. These binaries are separate from source-built CI artifacts. See the official
+fixed-name FactoryOnly images have been replaced by dated images. These binaries are separate from source-built CI artifacts. See the official
 [resources and
 documents](https://docs.waveshare.com/ESP32-P4-WIFI6-Touch-LCD-X/Resources-And-Documents)
 for the flash download tool and related materials.
@@ -178,7 +177,8 @@ for the flash download tool and related materials.
 | --- | --- |
 | [`examples/esp-idf/`](examples/esp-idf/) | First-party ESP-IDF projects |
 | [`examples/arduino/`](examples/arduino/) | First-party Arduino sketches and bundled LCD-5-style libraries |
-| [`firmware/`](firmware/) | Factory flashing binaries and default firmware source |
+| [`examples/factory/`](examples/factory/) | Factory firmware source |
+| [`firmware/`](firmware/) | Factory images, flashing instructions, and firmware manifest |
 | [`docs/`](docs/) | Compatibility and maintainer notes |
 | [`schematic/`](schematic/) | Board and adapter schematics |
 | [`assets/`](assets/) | Product images used by the documentation |
